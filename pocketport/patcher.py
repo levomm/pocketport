@@ -125,20 +125,22 @@ def _patch_shell_text(text: str) -> tuple[str, list[tuple[str, str, str]], list[
             patched = f"#!{TERMUX_PREFIX}/bin/bash{nl}"
             rule = "termux-shebang"
         else:
-            candidate, package_rule = _patch_package_line(patched)
-            if package_rule:
-                patched = candidate
-                rule = package_rule
+            complex_shell = any(x in patched for x in ("|", "&&", "||", ";", "$(", "`"))
+            if not complex_shell:
+                candidate, package_rule = _patch_package_line(patched)
+                if package_rule:
+                    patched = candidate
+                    rule = package_rule
 
-            new = re.sub(r"(?<![\w-])sudo\s+", "", patched)
-            if new != patched:
-                patched = new
-                rule = rule or "remove-sudo"
+                new = re.sub(r"(?<![\w-])sudo\s+", "", patched)
+                if new != patched:
+                    patched = new
+                    rule = rule or "remove-sudo"
 
-            new = re.sub(r"(?<![\w-])xdg-open\b", "termux-open", patched)
-            if new != patched:
-                patched = new
-                rule = rule or "termux-open"
+                new = re.sub(r"(?<![\w-])xdg-open\b", "termux-open", patched)
+                if new != patched:
+                    patched = new
+                    rule = rule or "termux-open"
 
         if patched != original:
             changes.append((rule or "shell", original.rstrip("\n"), patched.rstrip("\n")))
