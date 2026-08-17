@@ -51,13 +51,12 @@ SAFE_PACKAGE_FLAGS = {
     "--no-cache",
 }
 UNSAFE_SUDO_COMMAND_PREFIXES = ("-", "#", ">", "<", "|", "&", ";", "(", ")", "{", "}", "!")
-SHELL_ONLY_COMMANDS = {
-    ".", "[[", "alias", "bg", "bind", "break", "builtin", "cd", "command",
-    "compgen", "complete", "compopt", "continue", "declare", "dirs", "disown",
-    "eval", "exec", "export", "fc", "fg", "function", "getopts", "hash", "help",
-    "history", "jobs", "let", "local", "mapfile", "popd", "pushd", "read",
-    "readarray", "readonly", "return", "set", "shift", "shopt", "source", "suspend",
-    "times", "trap", "type", "typeset", "ulimit", "umask", "unalias", "unset", "wait",
+SAFE_SUDO_COMMANDS = {
+    "apk", "apt", "apt-get", "cargo", "chmod", "clang", "clang++", "cmake", "cp",
+    "curl", "dnf", "find", "g++", "gcc", "git", "go", "grep", "install", "ln",
+    "make", "mkdir", "mv", "ninja", "node", "npm", "pip", "pip3", "pkg", "pnpm",
+    "python", "python3", "rm", "rustc", "sed", "tar", "termux-open", "touch", "unzip",
+    "wget", "xdg-open", "yum", "yarn", "zip",
 }
 
 
@@ -149,6 +148,12 @@ def _replace_command_prefix(line: str, old: str, new: str) -> str:
     return re.sub(pattern, repl, line, count=1)
 
 
+def _safe_to_strip_sudo(command: str) -> bool:
+    if command in SAFE_SUDO_COMMANDS:
+        return True
+    return command.startswith(("/", "./", "../")) and len(command) > 1
+
+
 def _remove_sudo_prefix(line: str) -> str:
     newline = "\n" if line.endswith("\n") else ""
     body = line[:-1] if newline else line
@@ -157,7 +162,7 @@ def _remove_sudo_prefix(line: str) -> str:
         return line
     rest = match.group("rest")
     command = rest.split(None, 1)[0]
-    if rest.startswith(UNSAFE_SUDO_COMMAND_PREFIXES) or command in SHELL_ONLY_COMMANDS:
+    if rest.startswith(UNSAFE_SUDO_COMMAND_PREFIXES) or not _safe_to_strip_sudo(command):
         return line
     return f"{match.group('indent')}{rest}{newline}"
 
