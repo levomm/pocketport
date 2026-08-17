@@ -61,6 +61,16 @@ def test_underscore_delimited_x86_is_recognized():
     assert choice.name == "tool-x86_linux.tar.gz"
 
 
+def test_x86_dash_64_is_classified_as_x86_64():
+    assets = [
+        {"name": "tool-linux-x86-64.tar.gz", "browser_download_url": "https://x/x64"},
+    ]
+    assert select_asset(assets, "x86") is None
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux-x86-64.tar.gz"
+
+
 def test_checksum_asset_is_rejected():
     assets = [
         {
@@ -76,6 +86,16 @@ def test_signature_asset_is_rejected_even_with_good_markers():
         {
             "name": "tool-android-arm64.tar.gz.sig",
             "browser_download_url": "https://x/sig",
+        },
+    ]
+    assert select_asset(assets, "aarch64") is None
+
+
+def test_minisig_asset_is_rejected():
+    assets = [
+        {
+            "name": "tool-android-arm64.tar.gz.minisig",
+            "browser_download_url": "https://x/minisig",
         },
     ]
     assert select_asset(assets, "aarch64") is None
