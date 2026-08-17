@@ -94,6 +94,17 @@ def test_sudo_options_are_left_untouched(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_standalone_sudo_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
 def test_shebang_arguments_are_preserved(tmp_path: Path):
     script = tmp_path / "x.sh"
     script.write_text("#!/bin/bash -e\necho ok\n")
