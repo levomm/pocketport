@@ -105,6 +105,20 @@ def test_standalone_sudo_is_left_untouched(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_package_json_standalone_sudo_is_left_untouched(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "scripts": {"check": "sudo"},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["check"] == "sudo"
+    assert not report.files_changed
+
+
 def test_shebang_arguments_are_preserved(tmp_path: Path):
     script = tmp_path / "x.sh"
     script.write_text("#!/bin/bash -e\necho ok\n")
