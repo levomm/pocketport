@@ -71,6 +71,26 @@ def test_x86_dash_64_is_classified_as_x86_64():
     assert choice.name == "tool-linux-x86-64.tar.gz"
 
 
+def test_win32_x86_does_not_beat_linux_asset():
+    assets = [
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-win32-x86.zip", "browser_download_url": "https://x/win32"},
+    ]
+    choice = select_asset(assets, "x86")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
+
+
+def test_win_component_arm64_is_penalized():
+    assets = [
+        {"name": "tool-linux-arm64.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-win-arm64.zip", "browser_download_url": "https://x/win"},
+    ]
+    choice = select_asset(assets, "aarch64")
+    assert choice is not None
+    assert choice.name == "tool-linux-arm64.tar.gz"
+
+
 def test_checksum_asset_is_rejected():
     assets = [
         {
