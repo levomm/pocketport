@@ -14,9 +14,33 @@ ARCH_ALIASES = {
     "armv8": "aarch64",
     "x86_64": "x86_64",
     "amd64": "x86_64",
+    "x64": "x86_64",
     "i686": "x86",
     "i386": "x86",
+    "x86": "x86",
 }
+
+ARCH_PATTERNS = {
+    "aarch64": (
+        r"(^|[-_.])aarch64($|[-_.])",
+        r"(^|[-_.])arm64($|[-_.])",
+        r"(^|[-_.])armv?8($|[-_.])",
+    ),
+    "x86_64": (
+        r"(^|[-_.])x86_64($|[-_.])",
+        r"(^|[-_.])amd64($|[-_.])",
+        r"(^|[-_.])x64($|[-_.])",
+    ),
+    "x86": (
+        r"(^|[-_.])i[3-6]86($|[-_.])",
+        r"(^|[-_.])x86($|[-_.])",
+    ),
+}
+
+METADATA_MARKERS = (
+    ".sha256", ".sha512", ".sha1", ".md5", ".sig", ".asc",
+    "checksum", "checksums", "sha256sums", "sha512sums",
+)
 
 
 @dataclass
@@ -47,24 +71,35 @@ def _repo_slug(value: str) -> str:
     return value
 
 
+def _has_arch(name: str, arch: str) -> bool:
+    return any(re.search(pattern, name) for pattern in ARCH_PATTERNS.get(arch, ()))
+
+
+def _present_arches(name: str) -> set[str]:
+    return {arch for arch in ARCH_PATTERNS if _has_arch(name, arch)}
+
+
+def _is_metadata_asset(name: str) -> bool:
+    n = name.lower()
+    return any(marker in n for marker in METADATA_MARKERS)
+
+
 def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     n = name.lower()
     reasons: list[str] = []
     score = 0
 
-    if arch == "aarch64":
-        if "aarch64" in n:
+    present_arches = _present_arches(n)
+    if arch in ARCH_PATTERNS:
+        if arch in present_arches:
             score += 70
-            reasons.append("aarch64")
-        elif "arm64" in n:
-            score += 65
-            reasons.append("arm64")
-        elif re.search(r"(^|[-_.])armv?8($|[-_.])", n):
-            score += 55
-            reasons.append("armv8")
-        elif any(x in n for x in ("x86_64", "amd64", "i386", "i686")):
+            reasons.append(arch)
+        elif present_arches:
             score -= 100
             reasons.append("wrong-arch")
+    elif present_arches:
+        score -= 100
+        reasons.append("unknown-requested-arch")
 
     if "android" in n or "termux" in n:
         score += 35
@@ -85,9 +120,6 @@ def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     if any(x in n for x in ("source", "src")):
         score -= 35
         reasons.append("source")
-    if any(x in n for x in (".sha256", ".sha512", ".sig", ".asc", "checksums")):
-        score -= 80
-        reasons.append("metadata")
 
     return score, reasons
 
@@ -98,7 +130,7 @@ def select_asset(assets: list[dict], arch: str | None = None) -> AssetChoice | N
     for asset in assets:
         name = str(asset.get("name", ""))
         url = str(asset.get("browser_download_url", asset.get("url", "")))
-        if not name or not url:
+        if not name or not url or _is_metadata_asset(name):
             continue
         score, reasons = _asset_score(name, arch)
         choices.append(AssetChoice(name=name, url=url, score=score, reason=reasons))
@@ -118,7 +150,7 @@ def fetch_release(repo: str, tag: str = "latest") -> dict:
 
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "PocketPort/0.2",
+        "User-Agent": "PocketPort/0.2.1",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
