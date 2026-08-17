@@ -61,6 +61,50 @@ def test_complex_apt_line_is_not_rewritten(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_chained_update_is_not_rewritten(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "apt-get update && apt-get install -y curl\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
+def test_sudo_inside_quoted_data_is_not_removed(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = 'grep "sudo " input.txt\n'
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
+def test_shebang_arguments_are_preserved(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    script.write_text("#!/bin/bash -e\necho ok\n")
+
+    patch_repo(tmp_path)
+
+    assert script.read_text().startswith(
+        "#!/data/data/com.termux/files/usr/bin/bash -e\n"
+    )
+
+
+def test_package_option_with_value_is_not_rewritten(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "apt-get install -t bookworm curl\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
 def test_patched_termux_shebang_is_not_flagged_again(tmp_path: Path):
     from pocketport.scanner import scan
 
