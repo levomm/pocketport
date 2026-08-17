@@ -44,6 +44,13 @@ def test_selects_x86_64_for_x86_64_request():
     assert choice.name == "tool-linux-amd64.tar.gz"
 
 
+def test_x86_request_does_not_accept_x86_64_only_asset():
+    assets = [
+        {"name": "tool-linux-x86_64.tar.gz", "browser_download_url": "https://x/x64"},
+    ]
+    assert select_asset(assets, "x86") is None
+
+
 def test_checksum_asset_is_rejected():
     assets = [
         {
