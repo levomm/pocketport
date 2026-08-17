@@ -52,7 +52,7 @@ def test_package_json_scripts_are_patched(tmp_path: Path):
 
 def test_complex_apt_line_is_not_rewritten(tmp_path: Path):
     script = tmp_path / "x.sh"
-    original = "apt-get install foo && echo done\n"
+    original = "sudo apt-get install foo && echo done\n"
     script.write_text(original)
 
     report = patch_repo(tmp_path)
