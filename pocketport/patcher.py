@@ -50,6 +50,7 @@ SAFE_PACKAGE_FLAGS = {
     "-y", "--yes", "--assume-yes", "-q", "--quiet", "--no-install-recommends",
     "--no-cache",
 }
+UNSAFE_SUDO_COMMAND_PREFIXES = ("-", "#", ">", "<", "|", "&", ";", "(", ")", "{", "}", "!")
 
 
 @dataclass
@@ -147,7 +148,7 @@ def _remove_sudo_prefix(line: str) -> str:
     if not match:
         return line
     rest = match.group("rest")
-    if rest.startswith("-"):
+    if rest.startswith(UNSAFE_SUDO_COMMAND_PREFIXES):
         return line
     return f"{match.group('indent')}{rest}{newline}"
 
