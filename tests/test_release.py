@@ -32,3 +32,33 @@ def test_rejects_wrong_arch_only():
         {"name": "tool-linux-amd64.tar.gz", "browser_download_url": "https://x/amd64"},
     ]
     assert select_asset(assets, "aarch64") is None
+
+
+def test_selects_x86_64_for_x86_64_request():
+    assets = [
+        {"name": "tool-linux-arm64.tar.gz", "browser_download_url": "https://x/arm64"},
+        {"name": "tool-linux-amd64.tar.gz", "browser_download_url": "https://x/amd64"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux-amd64.tar.gz"
+
+
+def test_checksum_asset_is_rejected():
+    assets = [
+        {
+            "name": "tool-linux-aarch64.tar.gz.sha256",
+            "browser_download_url": "https://x/checksum",
+        },
+    ]
+    assert select_asset(assets, "aarch64") is None
+
+
+def test_signature_asset_is_rejected_even_with_good_markers():
+    assets = [
+        {
+            "name": "tool-android-arm64.tar.gz.sig",
+            "browser_download_url": "https://x/sig",
+        },
+    ]
+    assert select_asset(assets, "aarch64") is None
