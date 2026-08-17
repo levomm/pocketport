@@ -99,3 +99,25 @@ def test_minisig_asset_is_rejected():
         },
     ]
     assert select_asset(assets, "aarch64") is None
+
+
+def test_binary_name_containing_checksum_is_not_rejected():
+    assets = [
+        {
+            "name": "checksum-linux-arm64.tar.gz",
+            "browser_download_url": "https://x/binary",
+        },
+    ]
+    choice = select_asset(assets, "aarch64")
+    assert choice is not None
+    assert choice.name == "checksum-linux-arm64.tar.gz"
+
+
+def test_checksum_manifest_trailer_is_rejected():
+    assets = [
+        {
+            "name": "tool-checksums.txt",
+            "browser_download_url": "https://x/manifest",
+        },
+    ]
+    assert select_asset(assets, "aarch64") is None
