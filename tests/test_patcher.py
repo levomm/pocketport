@@ -223,6 +223,15 @@ def test_make_recipe_control_prefix_sudo_is_patched(tmp_path: Path):
     assert makefile.read_text() == "check:\n\t@git --version\n\t-git status\n"
 
 
+def test_make_recipe_spaced_control_prefixes_are_patched(tmp_path: Path):
+    makefile = tmp_path / "Makefile"
+    makefile.write_text("check:\n\t@ -sudo git --version\n\t+ @ sudo git status\n")
+
+    patch_repo(tmp_path)
+
+    assert makefile.read_text() == "check:\n\t@ -git --version\n\t+ @ git status\n"
+
+
 def test_make_recipe_control_prefix_package_manager_is_patched(tmp_path: Path):
     makefile = tmp_path / "Makefile"
     makefile.write_text("deps:\n\t+sudo apt-get update\n")
