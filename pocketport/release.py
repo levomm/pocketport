@@ -45,6 +45,14 @@ METADATA_TRAILER = re.compile(
     r"(?:^|[-_.])(?:checksums?|(?:sha(?:1|256|512)|md5|b2)sums?)(?:\.(?:txt|json))?$",
     re.IGNORECASE,
 )
+WINDOWS_COMPONENT = re.compile(
+    r"(?:^|[-_.])(?:windows|win(?:32|64)?)(?=$|[-_.])",
+    re.IGNORECASE,
+)
+MACOS_COMPONENT = re.compile(
+    r"(?:^|[-_.])(?:darwin|macos|osx)(?=$|[-_.])",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -88,6 +96,15 @@ def _is_metadata_asset(name: str) -> bool:
     return bool(METADATA_SUFFIX.search(n) or METADATA_TRAILER.search(n))
 
 
+def _is_wrong_os(name: str) -> bool:
+    n = name.lower()
+    return bool(
+        WINDOWS_COMPONENT.search(n)
+        or MACOS_COMPONENT.search(n)
+        or n.endswith((".exe", ".msi", ".dmg"))
+    )
+
+
 def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     n = name.lower()
     reasons: list[str] = []
@@ -118,7 +135,7 @@ def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     if n.endswith(".deb"):
         score -= 8
         reasons.append("deb")
-    if any(x in n for x in ("windows", "win64", "darwin", "macos", "osx")):
+    if _is_wrong_os(n):
         score -= 100
         reasons.append("wrong-os")
     if any(x in n for x in ("source", "src")):
