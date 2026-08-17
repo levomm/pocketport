@@ -56,7 +56,7 @@ FOREIGN_OS_COMPONENT = re.compile(
     re.IGNORECASE,
 )
 SOURCE_COMPONENT = re.compile(
-    r"(?:^|[-_.])(?:source|src)(?=$|[-_.])",
+    r"(?:^|[-_.])(?:sources?|srcs?)(?=$|[-_.])",
     re.IGNORECASE,
 )
 SOURCE_ARCHIVE_SUFFIXES = (
