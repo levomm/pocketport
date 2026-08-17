@@ -119,6 +119,15 @@ def test_package_json_standalone_sudo_is_left_untouched(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_sudo_removal_preserves_line_endings(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    script.write_text("sudo echo one\necho two\n")
+
+    patch_repo(tmp_path)
+
+    assert script.read_text() == "echo one\necho two\n"
+
+
 def test_shebang_arguments_are_preserved(tmp_path: Path):
     script = tmp_path / "x.sh"
     script.write_text("#!/bin/bash -e\necho ok\n")
