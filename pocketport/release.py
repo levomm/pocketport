@@ -37,9 +37,12 @@ ARCH_PATTERNS = {
     ),
 }
 
-METADATA_MARKERS = (
+METADATA_SUFFIXES = (
     ".sha256", ".sha512", ".sha1", ".md5", ".sig", ".minisig", ".asc",
-    "checksum", "checksums", "sha256sums", "sha512sums",
+)
+METADATA_TRAILER = re.compile(
+    r"(?:^|[-_.])(checksums?|sha256sums|sha512sums)(?:\.(?:txt|json))?$",
+    re.IGNORECASE,
 )
 
 
@@ -81,7 +84,7 @@ def _present_arches(name: str) -> set[str]:
 
 def _is_metadata_asset(name: str) -> bool:
     n = name.lower()
-    return any(marker in n for marker in METADATA_MARKERS)
+    return n.endswith(METADATA_SUFFIXES) or bool(METADATA_TRAILER.search(n))
 
 
 def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
