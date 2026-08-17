@@ -94,6 +94,28 @@ def test_sudo_options_are_left_untouched(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_sudo_comment_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo # explanation\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
+def test_sudo_redirection_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo > /tmp/log\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
 def test_standalone_sudo_is_left_untouched(tmp_path: Path):
     script = tmp_path / "x.sh"
     original = "sudo\n"
