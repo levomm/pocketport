@@ -42,3 +42,9 @@ def test_python_risky_dependency_is_detected(tmp_path: Path):
     (tmp_path / "requirements.txt").write_text("llama-cpp-python==0.3.0\n", encoding="utf-8")
     report = scan(tmp_path)
     assert any("llama-cpp-python" in f.detail for f in report.findings)
+
+
+def test_x86_only_shell_is_flagged(tmp_path: Path):
+    (tmp_path / "install.sh").write_text("URL=https://example/x86_64/tool.tar.gz\n")
+    report = scan(tmp_path)
+    assert any(f.kind == "architecture" for f in report.findings)
