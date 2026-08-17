@@ -42,7 +42,7 @@ METADATA_SUFFIX = re.compile(
     re.IGNORECASE,
 )
 METADATA_TRAILER = re.compile(
-    r"(?:^|[-_.])(checksums?|sha256sums|sha512sums)(?:\.(?:txt|json))?$",
+    r"(?:^|[-_.])(?:checksums?|(?:sha(?:1|256|512)|md5|b2)sums?)(?:\.(?:txt|json))?$",
     re.IGNORECASE,
 )
 
