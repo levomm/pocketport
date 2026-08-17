@@ -101,6 +101,26 @@ def test_freebsd_asset_is_rejected_before_arch_score():
     assert choice.name == "tool-linux.tar.gz"
 
 
+def test_mingw_target_is_rejected_before_arch_score():
+    assets = [
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-x86_64-w64-mingw32.zip", "browser_download_url": "https://x/mingw"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
+
+
+def test_msvc_target_is_rejected_before_arch_score():
+    assets = [
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-msvc-x64.zip", "browser_download_url": "https://x/msvc"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
+
+
 def test_checksum_asset_is_rejected():
     assets = [
         {
