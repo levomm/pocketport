@@ -26,7 +26,7 @@ def test_shell_patches_safe_commands(tmp_path: Path):
 
 def test_dry_run_does_not_write(tmp_path: Path):
     script = tmp_path / "x.sh"
-    original = "#!/bin/bash\nsudo echo hi\n"
+    original = "#!/bin/bash\nsudo git --version\n"
     script.write_text(original)
 
     report = patch_repo(tmp_path, dry_run=True)
@@ -149,6 +149,28 @@ def test_sudo_named_shell_builtin_is_left_untouched(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_sudo_colon_builtin_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo :\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
+def test_sudo_unknown_command_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo custom-project-command --flag\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
 def test_standalone_sudo_is_left_untouched(tmp_path: Path):
     script = tmp_path / "x.sh"
     original = "sudo\n"
@@ -176,11 +198,20 @@ def test_package_json_standalone_sudo_is_left_untouched(tmp_path: Path):
 
 def test_sudo_removal_preserves_line_endings(tmp_path: Path):
     script = tmp_path / "x.sh"
-    script.write_text("sudo echo one\necho two\n")
+    script.write_text("sudo git status\ngit --version\n")
 
     patch_repo(tmp_path)
 
-    assert script.read_text() == "echo one\necho two\n"
+    assert script.read_text() == "git status\ngit --version\n"
+
+
+def test_sudo_executable_path_is_stripped(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    script.write_text("sudo ./install-helper --check\n")
+
+    patch_repo(tmp_path)
+
+    assert script.read_text() == "./install-helper --check\n"
 
 
 def test_shebang_arguments_are_preserved(tmp_path: Path):
