@@ -135,11 +135,19 @@ def _replace_command_prefix(line: str, old: str, new: str) -> str:
     def repl(match: re.Match[str]) -> str:
         indent = match.group("indent")
         sep = match.group("sep")
-        if not new:
-            return indent
         return f"{indent}{new}{sep}"
 
     return re.sub(pattern, repl, line, count=1)
+
+
+def _remove_sudo_prefix(line: str) -> str:
+    match = re.match(r"^(?P<indent>\s*)sudo\s+(?P<rest>.*)$", line)
+    if not match:
+        return line
+    rest = match.group("rest")
+    if rest.lstrip().startswith("-"):
+        return line
+    return f"{match.group('indent')}{rest}"
 
 
 def _patch_shebang(line: str) -> str | None:
@@ -179,7 +187,7 @@ def _patch_shell_text(text: str) -> tuple[str, list[tuple[str, str, str]], list[
                     patched = candidate
                     rule = package_rule
 
-                new = _replace_command_prefix(patched, "sudo", "")
+                new = _remove_sudo_prefix(patched)
                 if new != patched:
                     patched = new
                     rule = rule or "remove-sudo"
@@ -218,7 +226,7 @@ def _patch_package_json(path: Path) -> tuple[str | None, list[tuple[str, str, st
             continue
         original = value
         if not any(x in value for x in SHELL_META):
-            value = _replace_command_prefix(value, "sudo", "")
+            value = _remove_sudo_prefix(value)
             value = _replace_command_prefix(value, "xdg-open", "termux-open")
         if "systemctl" in value:
             warnings.append(f"package.json script '{name}' still uses systemctl")
