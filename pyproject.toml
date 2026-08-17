@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pocketport"
+version = "0.1.0"
+description = "Port desktop-first GitHub projects to Android/Termux."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "levomm"}]
+keywords = ["android", "termux", "linux", "portability", "github", "cli"]
+
+[project.scripts]
+pocketport = "pocketport.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pocketport*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

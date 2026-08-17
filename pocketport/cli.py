@@ -1,0 +1,112 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+
+from .scanner import scan
+from .generator import write_generated
+
+
+def _clone(url: str, dest: Path) -> Path:
+    if not shutil.which("git"):
+        raise SystemExit("git is required")
+    subprocess.run(["git", "clone", "--depth", "1", url, str(dest)], check=True)
+    return dest
+
+
+def _resolve_target(target: str):
+    p = Path(target).expanduser()
+    if p.exists():
+        return p.resolve(), None
+
+    if target.startswith(("https://github.com/", "git@github.com:")):
+        td = tempfile.TemporaryDirectory(prefix="pocketport-")
+        path = Path(td.name) / "repo"
+        _clone(target, path)
+        return path, td
+
+    raise SystemExit(f"Target does not exist and is not a GitHub URL: {target}")
+
+
+def cmd_scan(args) -> int:
+    root, td = _resolve_target(args.target)
+    try:
+        report = scan(root)
+        if args.json:
+            print(json.dumps(report.to_dict(), indent=2))
+        else:
+            print(f"PocketPort score: {report.score}/100")
+            print(f"Strategy: {report.strategy}")
+            print(f"Stack: {', '.join(report.stack)}")
+            if report.findings:
+                print("")
+                for f in report.findings[:50]:
+                    loc = f" [{f.path}]" if f.path else ""
+                    print(f"- {f.severity.upper():6} {f.kind}: {f.detail}{loc}")
+            else:
+                print("No obvious Termux blockers found.")
+        return 0
+    finally:
+        if td:
+            td.cleanup()
+
+
+def cmd_generate(args) -> int:
+    root = Path(args.path).expanduser().resolve()
+    report = scan(root)
+    script = write_generated(report, root)
+    print(f"Wrote {script}")
+    print(f"Strategy: {report.strategy} | score={report.score}/100")
+    return 0
+
+
+def cmd_doctor(args) -> int:
+    prefix = os.environ.get("PREFIX", "")
+    termux = "com.termux" in prefix
+    print(f"Termux: {'yes' if termux else 'no'}")
+    print(f"Python: {sys.version.split()[0]}")
+    print(f"Machine: {platform.machine()}")
+    print(f"Platform: {platform.platform()}")
+    for cmd in ["git", "python", "node", "npm", "clang", "cmake", "rustc", "cargo", "go", "proot-distro"]:
+        print(f"{cmd:13} {'ok' if shutil.which(cmd) else 'missing'}")
+    if termux:
+        print("PREFIX:", prefix)
+    return 0
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="pocketport",
+        description="Make desktop-first GitHub projects less hostile to Android/Termux.",
+    )
+    sub = p.add_subparsers(dest="command", required=True)
+
+    s = sub.add_parser("scan", help="scan a local repo or GitHub URL")
+    s.add_argument("target")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_scan)
+
+    g = sub.add_parser("generate", help="generate Termux install assets in a local repo")
+    g.add_argument("path", nargs="?", default=".")
+    g.set_defaults(func=cmd_generate)
+
+    d = sub.add_parser("doctor", help="inspect the current Android/Termux toolchain")
+    d.set_defaults(func=cmd_doctor)
+
+    return p
+
+
+def main():
+    args = build_parser().parse_args()
+    raise SystemExit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()
