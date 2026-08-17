@@ -116,6 +116,39 @@ def test_sudo_redirection_is_left_untouched(tmp_path: Path):
     assert not report.files_changed
 
 
+def test_sudo_shell_only_dot_builtin_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo . ./env.sh\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
+def test_sudo_double_bracket_builtin_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo [[ -e file ]]\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
+def test_sudo_named_shell_builtin_is_left_untouched(tmp_path: Path):
+    script = tmp_path / "x.sh"
+    original = "sudo source ./env.sh\n"
+    script.write_text(original)
+
+    report = patch_repo(tmp_path)
+
+    assert script.read_text() == original
+    assert not report.files_changed
+
+
 def test_standalone_sudo_is_left_untouched(tmp_path: Path):
     script = tmp_path / "x.sh"
     original = "sudo\n"
