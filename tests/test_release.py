@@ -138,6 +138,26 @@ def test_msvc_target_is_rejected_before_arch_score():
     assert choice.name == "tool-linux.tar.gz"
 
 
+def test_macosx_target_is_rejected():
+    assets = [
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-macosx-amd64.zip", "browser_download_url": "https://x/macosx"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
+
+
+def test_darwin64_target_is_rejected():
+    assets = [
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-darwin64-amd64.zip", "browser_download_url": "https://x/darwin64"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
+
+
 def test_checksum_asset_is_rejected():
     assets = [
         {
