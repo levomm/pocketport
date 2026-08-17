@@ -38,19 +38,18 @@ ARCH_PATTERNS = {
 }
 
 METADATA_SUFFIX = re.compile(
-    r"(?:\.(?:sha1|sha256|sha512|md5)(?:\.txt)?|\.(?:sig|minisig|asc))$",
+    r"(?:\.(?:sha1|sha224|sha256|sha384|sha512|md5|b2)(?:\.txt)?|\.(?:sig|minisig|asc))$",
     re.IGNORECASE,
 )
 METADATA_TRAILER = re.compile(
-    r"(?:^|[-_.])(?:checksums?|(?:sha(?:1|256|512)|md5|b2)sums?)(?:\.(?:txt|json))?$",
+    r"(?:^|[-_.])(?:checksums?|(?:sha(?:1|224|256|384|512)|md5|b2)sums?)(?:\.(?:txt|json))?$",
     re.IGNORECASE,
 )
-WINDOWS_COMPONENT = re.compile(
-    r"(?:^|[-_.])(?:windows|win(?:32|64)?)(?=$|[-_.])",
-    re.IGNORECASE,
-)
-MACOS_COMPONENT = re.compile(
-    r"(?:^|[-_.])(?:darwin|macos|osx)(?=$|[-_.])",
+FOREIGN_OS_COMPONENT = re.compile(
+    r"(?:^|[-_.])(?:"
+    r"windows|win(?:32|64)?|darwin|macos|osx|"
+    r"freebsd|openbsd|netbsd|dragonfly|solaris|illumos|aix"
+    r")(?=$|[-_.])",
     re.IGNORECASE,
 )
 
@@ -99,10 +98,18 @@ def _is_metadata_asset(name: str) -> bool:
 def _is_wrong_os(name: str) -> bool:
     n = name.lower()
     return bool(
-        WINDOWS_COMPONENT.search(n)
-        or MACOS_COMPONENT.search(n)
+        FOREIGN_OS_COMPONENT.search(n)
         or n.endswith((".exe", ".msi", ".dmg"))
     )
+
+
+def _arch_compatible(name: str, arch: str) -> bool:
+    present = _present_arches(name.lower())
+    if not present:
+        return True
+    if arch not in ARCH_PATTERNS:
+        return False
+    return arch in present
 
 
 def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
@@ -111,16 +118,9 @@ def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     score = 0
 
     present_arches = _present_arches(n)
-    if arch in ARCH_PATTERNS:
-        if arch in present_arches:
-            score += 70
-            reasons.append(arch)
-        elif present_arches:
-            score -= 100
-            reasons.append("wrong-arch")
-    elif present_arches:
-        score -= 100
-        reasons.append("unknown-requested-arch")
+    if arch in present_arches:
+        score += 70
+        reasons.append(arch)
 
     if "android" in n or "termux" in n:
         score += 35
@@ -135,10 +135,7 @@ def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     if n.endswith(".deb"):
         score -= 8
         reasons.append("deb")
-    if _is_wrong_os(n):
-        score -= 100
-        reasons.append("wrong-os")
-    if any(x in n for x in ("source", "src")):
+    if re.search(r"(?:^|[-_.])(?:source|src)(?=$|[-_.])", n):
         score -= 35
         reasons.append("source")
 
@@ -151,7 +148,9 @@ def select_asset(assets: list[dict], arch: str | None = None) -> AssetChoice | N
     for asset in assets:
         name = str(asset.get("name", ""))
         url = str(asset.get("browser_download_url", asset.get("url", "")))
-        if not name or not url or _is_metadata_asset(name):
+        if not name or not url:
+            continue
+        if _is_metadata_asset(name) or _is_wrong_os(name) or not _arch_compatible(name, arch):
             continue
         score, reasons = _asset_score(name, arch)
         choices.append(AssetChoice(name=name, url=url, score=score, reason=reasons))
