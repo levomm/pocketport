@@ -214,6 +214,24 @@ def test_sudo_executable_path_is_stripped(tmp_path: Path):
     assert script.read_text() == "./install-helper --check\n"
 
 
+def test_make_recipe_control_prefix_sudo_is_patched(tmp_path: Path):
+    makefile = tmp_path / "Makefile"
+    makefile.write_text("check:\n\t@sudo git --version\n\t-sudo git status\n")
+
+    patch_repo(tmp_path)
+
+    assert makefile.read_text() == "check:\n\t@git --version\n\t-git status\n"
+
+
+def test_make_recipe_control_prefix_package_manager_is_patched(tmp_path: Path):
+    makefile = tmp_path / "Makefile"
+    makefile.write_text("deps:\n\t+sudo apt-get update\n")
+
+    patch_repo(tmp_path)
+
+    assert makefile.read_text() == "deps:\n\t+pkg update -y\n"
+
+
 def test_shebang_arguments_are_preserved(tmp_path: Path):
     script = tmp_path / "x.sh"
     script.write_text("#!/bin/bash -e\necho ok\n")
