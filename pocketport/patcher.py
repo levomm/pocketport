@@ -179,7 +179,16 @@ def _patch_shebang(line: str) -> str | None:
     return f"#!{TERMUX_PREFIX}/bin/bash{match.group('args')}{newline}"
 
 
-def _patch_shell_text(text: str) -> tuple[str, list[tuple[str, str, str]], list[str]]:
+def _unwrap_make_recipe(line: str) -> tuple[str, str]:
+    match = re.match(r"^(?P<prefix>\t[ \t]*[@+\-]+)(?P<body>.*)$", line)
+    if not match:
+        return "", line
+    return match.group("prefix"), match.group("body")
+
+
+def _patch_shell_text(
+    text: str, *, makefile: bool = False
+) -> tuple[str, list[tuple[str, str, str]], list[str]]:
     changes: list[tuple[str, str, str]] = []
     warnings: list[str] = []
     lines = text.splitlines(keepends=True)
@@ -187,33 +196,35 @@ def _patch_shell_text(text: str) -> tuple[str, list[tuple[str, str, str]], list[
 
     for i, line in enumerate(lines):
         original = line
-        patched = line
+        recipe_prefix, work = _unwrap_make_recipe(line) if makefile else ("", line)
+        patched_work = work
         rule = None
 
-        if i == 0:
-            shebang = _patch_shebang(patched)
+        if i == 0 and not recipe_prefix:
+            shebang = _patch_shebang(patched_work)
             if shebang is not None:
-                patched = shebang
+                patched_work = shebang
                 rule = "termux-shebang"
 
-        if patched == original or i != 0:
-            complex_shell = any(x in patched for x in SHELL_META)
+        if patched_work == work or i != 0:
+            complex_shell = any(x in patched_work for x in SHELL_META)
             if not complex_shell:
-                candidate, package_rule = _patch_package_line(patched)
+                candidate, package_rule = _patch_package_line(patched_work)
                 if package_rule:
-                    patched = candidate
+                    patched_work = candidate
                     rule = package_rule
 
-                new = _remove_sudo_prefix(patched)
-                if new != patched:
-                    patched = new
+                new = _remove_sudo_prefix(patched_work)
+                if new != patched_work:
+                    patched_work = new
                     rule = rule or "remove-sudo"
 
-                new = _replace_command_prefix(patched, "xdg-open", "termux-open")
-                if new != patched:
-                    patched = new
+                new = _replace_command_prefix(patched_work, "xdg-open", "termux-open")
+                if new != patched_work:
+                    patched_work = new
                     rule = rule or "termux-open"
 
+        patched = recipe_prefix + patched_work
         if patched != original:
             changes.append((rule or "shell", original.rstrip("\n"), patched.rstrip("\n")))
         if "systemctl" in patched:
@@ -287,7 +298,9 @@ def patch_repo(root: Path, *, dry_run: bool = False, backup: bool = False) -> Pa
                 warnings.extend(f"{rel}: {w}" for w in local_warnings)
                 continue
         else:
-            patched, local_changes, local_warnings = _patch_shell_text(original)
+            patched, local_changes, local_warnings = _patch_shell_text(
+                original, makefile=path.name == "Makefile"
+            )
 
         warnings.extend(f"{rel}: {w}" for w in local_warnings)
         if patched == original:
