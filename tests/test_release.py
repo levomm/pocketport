@@ -137,3 +137,19 @@ def test_checksum_manifest_trailer_is_rejected():
         },
     ]
     assert select_asset(assets, "aarch64") is None
+
+
+def test_singular_sha256sum_manifest_is_rejected():
+    assets = [
+        {
+            "name": "tool-android-arm64.sha256sum.txt",
+            "browser_download_url": "https://x/sha256sum",
+        },
+        {
+            "name": "tool-linux-arm64.tar.gz",
+            "browser_download_url": "https://x/binary",
+        },
+    ]
+    choice = select_asset(assets, "aarch64")
+    assert choice is not None
+    assert choice.name == "tool-linux-arm64.tar.gz"
