@@ -141,11 +141,11 @@ def _replace_command_prefix(line: str, old: str, new: str) -> str:
 
 
 def _remove_sudo_prefix(line: str) -> str:
-    match = re.match(r"^(?P<indent>\s*)sudo\s+(?P<rest>.*)$", line)
+    match = re.match(r"^(?P<indent>[ \t]*)sudo[ \t]+(?P<rest>\S.*)$", line)
     if not match:
         return line
     rest = match.group("rest")
-    if rest.lstrip().startswith("-"):
+    if rest.startswith("-"):
         return line
     return f"{match.group('indent')}{rest}"
 
