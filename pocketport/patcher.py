@@ -180,10 +180,12 @@ def _patch_shebang(line: str) -> str | None:
 
 
 def _unwrap_make_recipe(line: str) -> tuple[str, str]:
-    match = re.match(r"^(?P<prefix>\t[ \t]*[@+\-]+)(?P<body>.*)$", line)
+    newline = "\n" if line.endswith("\n") else ""
+    body = line[:-1] if newline else line
+    match = re.match(r"^(?P<prefix>\t[ \t]*[@+\-]+)(?P<body>.*)$", body)
     if not match:
         return "", line
-    return match.group("prefix"), match.group("body")
+    return match.group("prefix"), match.group("body") + newline
 
 
 def _patch_shell_text(
