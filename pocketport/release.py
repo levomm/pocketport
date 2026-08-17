@@ -50,7 +50,7 @@ METADATA_TRAILER = re.compile(
 FOREIGN_OS_COMPONENT = re.compile(
     r"(?:^|[-_.])(?:"
     r"windows|win(?:32|64)?|mingw(?:32|64)?|cygwin|msys2?|msvc|"
-    r"darwin|macos|osx|"
+    r"darwin(?:32|64|amd64|arm64)?|macosx?|osx|"
     r"freebsd|openbsd|netbsd|dragonfly|solaris|illumos|aix"
     r")(?=$|[-_.])",
     re.IGNORECASE,
