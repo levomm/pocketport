@@ -51,6 +51,16 @@ def test_x86_request_does_not_accept_x86_64_only_asset():
     assert select_asset(assets, "x86") is None
 
 
+def test_underscore_delimited_x86_is_recognized():
+    assets = [
+        {"name": "tool-x86_linux.tar.gz", "browser_download_url": "https://x/x86"},
+    ]
+    assert select_asset(assets, "aarch64") is None
+    choice = select_asset(assets, "x86")
+    assert choice is not None
+    assert choice.name == "tool-x86_linux.tar.gz"
+
+
 def test_checksum_asset_is_rejected():
     assets = [
         {
