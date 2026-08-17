@@ -55,6 +55,13 @@ FOREIGN_OS_COMPONENT = re.compile(
     r")(?=$|[-_.])",
     re.IGNORECASE,
 )
+SOURCE_COMPONENT = re.compile(
+    r"(?:^|[-_.])(?:source|src)(?=$|[-_.])",
+    re.IGNORECASE,
+)
+SOURCE_ARCHIVE_SUFFIXES = (
+    ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar.zst", ".zip",
+)
 
 
 @dataclass
@@ -106,6 +113,14 @@ def _is_wrong_os(name: str) -> bool:
     )
 
 
+def _is_source_archive(name: str) -> bool:
+    n = name.lower()
+    return bool(
+        SOURCE_COMPONENT.search(n)
+        and n.endswith(SOURCE_ARCHIVE_SUFFIXES)
+    )
+
+
 def _arch_compatible(name: str, arch: str) -> bool:
     present = _present_arches(name.lower())
     if not present:
@@ -138,7 +153,7 @@ def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
     if n.endswith(".deb"):
         score -= 8
         reasons.append("deb")
-    if re.search(r"(?:^|[-_.])(?:source|src)(?=$|[-_.])", n):
+    if SOURCE_COMPONENT.search(n):
         score -= 35
         reasons.append("source")
 
@@ -153,7 +168,12 @@ def select_asset(assets: list[dict], arch: str | None = None) -> AssetChoice | N
         url = str(asset.get("browser_download_url", asset.get("url", "")))
         if not name or not url:
             continue
-        if _is_metadata_asset(name) or _is_wrong_os(name) or not _arch_compatible(name, arch):
+        if (
+            _is_metadata_asset(name)
+            or _is_wrong_os(name)
+            or _is_source_archive(name)
+            or not _arch_compatible(name, arch)
+        ):
             continue
         score, reasons = _asset_score(name, arch)
         choices.append(AssetChoice(name=name, url=url, score=score, reason=reasons))
