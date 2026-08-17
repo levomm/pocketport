@@ -6,6 +6,23 @@ def test_normalize_arm64():
     assert normalize_arch("aarch64") == "aarch64"
 
 
+def test_normalize_i386_family():
+    assert normalize_arch("i386") == "x86"
+    assert normalize_arch("i486") == "x86"
+    assert normalize_arch("i586") == "x86"
+    assert normalize_arch("i686") == "x86"
+
+
+def test_selects_i586_asset_for_i586_request():
+    assets = [
+        {"name": "tool-linux-i586.tar.gz", "browser_download_url": "https://x/i586"},
+        {"name": "tool-linux-amd64.tar.gz", "browser_download_url": "https://x/amd64"},
+    ]
+    choice = select_asset(assets, "i586")
+    assert choice is not None
+    assert choice.name == "tool-linux-i586.tar.gz"
+
+
 def test_selects_arm64_linux_asset():
     assets = [
         {"name": "tool-linux-amd64.tar.gz", "browser_download_url": "https://x/amd64"},
