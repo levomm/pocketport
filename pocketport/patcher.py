@@ -51,6 +51,14 @@ SAFE_PACKAGE_FLAGS = {
     "--no-cache",
 }
 UNSAFE_SUDO_COMMAND_PREFIXES = ("-", "#", ">", "<", "|", "&", ";", "(", ")", "{", "}", "!")
+SHELL_ONLY_COMMANDS = {
+    ".", "[[", "alias", "bg", "bind", "break", "builtin", "cd", "command",
+    "compgen", "complete", "compopt", "continue", "declare", "dirs", "disown",
+    "eval", "exec", "export", "fc", "fg", "function", "getopts", "hash", "help",
+    "history", "jobs", "let", "local", "mapfile", "popd", "pushd", "read",
+    "readarray", "readonly", "return", "set", "shift", "shopt", "source", "suspend",
+    "times", "trap", "type", "typeset", "ulimit", "umask", "unalias", "unset", "wait",
+}
 
 
 @dataclass
@@ -148,7 +156,8 @@ def _remove_sudo_prefix(line: str) -> str:
     if not match:
         return line
     rest = match.group("rest")
-    if rest.startswith(UNSAFE_SUDO_COMMAND_PREFIXES):
+    command = rest.split(None, 1)[0]
+    if rest.startswith(UNSAFE_SUDO_COMMAND_PREFIXES) or command in SHELL_ONLY_COMMANDS:
         return line
     return f"{match.group('indent')}{rest}{newline}"
 
