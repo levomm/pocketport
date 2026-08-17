@@ -266,3 +266,19 @@ def test_source_archive_is_rejected_before_scoring():
     choice = select_asset(assets, "aarch64")
     assert choice is not None
     assert choice.name == "tool-linux-arm64.tar.gz"
+
+
+def test_plural_sources_archive_is_rejected_before_scoring():
+    assets = [
+        {
+            "name": "tool-android-arm64-sources.tar.gz",
+            "browser_download_url": "https://x/sources",
+        },
+        {
+            "name": "tool-linux-arm64.tar.gz",
+            "browser_download_url": "https://x/binary",
+        },
+    ]
+    choice = select_asset(assets, "aarch64")
+    assert choice is not None
+    assert choice.name == "tool-linux-arm64.tar.gz"
