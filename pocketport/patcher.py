@@ -141,13 +141,15 @@ def _replace_command_prefix(line: str, old: str, new: str) -> str:
 
 
 def _remove_sudo_prefix(line: str) -> str:
-    match = re.match(r"^(?P<indent>[ \t]*)sudo[ \t]+(?P<rest>\S.*)$", line)
+    newline = "\n" if line.endswith("\n") else ""
+    body = line[:-1] if newline else line
+    match = re.match(r"^(?P<indent>[ \t]*)sudo[ \t]+(?P<rest>\S.*)$", body)
     if not match:
         return line
     rest = match.group("rest")
     if rest.startswith("-"):
         return line
-    return f"{match.group('indent')}{rest}"
+    return f"{match.group('indent')}{rest}{newline}"
 
 
 def _patch_shebang(line: str) -> str | None:
