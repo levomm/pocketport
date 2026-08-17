@@ -81,7 +81,7 @@ def test_win32_x86_does_not_beat_linux_asset():
     assert choice.name == "tool-linux.tar.gz"
 
 
-def test_win_component_arm64_is_penalized():
+def test_win_component_arm64_is_rejected():
     assets = [
         {"name": "tool-linux-arm64.tar.gz", "browser_download_url": "https://x/linux"},
         {"name": "tool-win-arm64.zip", "browser_download_url": "https://x/win"},
@@ -89,6 +89,16 @@ def test_win_component_arm64_is_penalized():
     choice = select_asset(assets, "aarch64")
     assert choice is not None
     assert choice.name == "tool-linux-arm64.tar.gz"
+
+
+def test_freebsd_asset_is_rejected_before_arch_score():
+    assets = [
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+        {"name": "tool-freebsd-amd64.tar.gz", "browser_download_url": "https://x/freebsd"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
 
 
 def test_checksum_asset_is_rejected():
@@ -99,6 +109,16 @@ def test_checksum_asset_is_rejected():
         },
     ]
     assert select_asset(assets, "aarch64") is None
+
+
+def test_sha384_sidecar_is_rejected():
+    assets = [
+        {"name": "tool-amd64.sha384", "browser_download_url": "https://x/sha384"},
+        {"name": "tool-linux.tar.gz", "browser_download_url": "https://x/linux"},
+    ]
+    choice = select_asset(assets, "x86_64")
+    assert choice is not None
+    assert choice.name == "tool-linux.tar.gz"
 
 
 def test_checksum_text_wrapper_is_rejected():
