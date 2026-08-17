@@ -81,7 +81,8 @@ def _iter_text_files(root: Path) -> Iterable[Path]:
     for p in root.rglob("*"):
         if not p.is_file():
             continue
-        if any(part in {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", "tests", "test", "docs"} for part in p.parts):
+        rel_parts = p.relative_to(root).parts
+        if any(part in {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", "tests", "test", "docs", ".pocketport"} for part in rel_parts):
             continue
         if p.name in {"Dockerfile", "Makefile", "Procfile"} or p.suffix.lower() in TEXT_SUFFIXES:
             try:
@@ -167,12 +168,21 @@ def scan(root: Path) -> ScanReport:
                     findings.append(Finding("medium", "linux-assumption", detail, rel))
                     seen.add(key)
 
+        patchable_lower = lower.replace("/data/data/com.termux/files/usr/bin/bash", "")
         for needle, detail in TERMUX_PATCHABLE.items():
-            if needle.lower() in lower:
+            if needle.lower() in patchable_lower:
                 key = ("patch", needle, rel)
                 if key not in seen:
                     findings.append(Finding("low", "patchable", detail, rel))
                     seen.add(key)
+
+        x86 = any(token in lower for token in ("x86_64", "amd64"))
+        arm = any(token in lower for token in ("aarch64", "arm64"))
+        if x86 and not arm:
+            key = ("arch", rel)
+            if key not in seen:
+                findings.append(Finding("medium", "architecture", "x86-only architecture assumption detected", rel))
+                seen.add(key)
 
     unique_issues = {(f.severity, f.kind, f.detail) for f in findings}
     high = sum(severity == "high" for severity, _, _ in unique_issues)
