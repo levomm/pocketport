@@ -81,6 +81,22 @@ def test_checksum_asset_is_rejected():
     assert select_asset(assets, "aarch64") is None
 
 
+def test_checksum_text_wrapper_is_rejected():
+    assets = [
+        {
+            "name": "tool-android-arm64.tar.gz.sha256.txt",
+            "browser_download_url": "https://x/checksum-text",
+        },
+        {
+            "name": "tool-linux-arm64.tar.gz",
+            "browser_download_url": "https://x/binary",
+        },
+    ]
+    choice = select_asset(assets, "aarch64")
+    assert choice is not None
+    assert choice.name == "tool-linux-arm64.tar.gz"
+
+
 def test_signature_asset_is_rejected_even_with_good_markers():
     assets = [
         {
