@@ -3,16 +3,7 @@
   "functions": {
     "api/**/*.py": {
       "maxDuration": 60,
-      "excludeFiles": "{tests/**,experiments/**,.github/**,web/**}"
+      "excludeFiles": "{tests/**,experiments/**,.github/**}"
     }
-  },
-  "rewrites": [
-    { "source": "/", "destination": "/web/index.html" },
-    { "source": "/styles.css", "destination": "/web/styles.css" },
-    { "source": "/app.js", "destination": "/web/app.js" },
-    { "source": "/adapter.js", "destination": "/web/adapter.js" },
-    { "source": "/recorded-scans/:path*", "destination": "/web/recorded-scans/:path*" },
-    { "source": "/target", "destination": "/web/index.html" },
-    { "source": "/scan/:path*", "destination": "/web/index.html" }
-  ]
+  }
 }
