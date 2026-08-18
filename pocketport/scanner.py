@@ -278,6 +278,15 @@ def _strategy(findings: list[Finding], stack: list[str]) -> str:
         return "proot"
     if len(runtime_high) == 1 or len(runtime_adaptations) >= 3:
         return "hybrid"
+
+    # A repository whose only executable surface is a Docker image is not a
+    # native Termux application merely because Dockerfile assumptions are build
+    # scoped. If source/runtime markers exist beside the Dockerfile, assess that
+    # native surface on its own merits instead.
+    native_runtime_stacks = {"node", "python", "rust", "go"}
+    if "docker" in stack and not (set(stack) & native_runtime_stacks):
+        return "hybrid"
+
     return "native"
 
 
