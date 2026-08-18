@@ -1,0 +1,38 @@
+name: live-scan-smoke
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "pocketport/live_scan.py"
+      - "api/scan.py"
+      - "web/adapter.js"
+      - "vercel.json"
+      - "tests/test_live_scan.py"
+      - ".github/workflows/live-scan-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PocketPort
+        run: python -m pip install -e .
+      - name: Scan a real public GitHub repository
+        run: |
+          python - <<'PY'
+          from pocketport.live_scan import scan_public_github
+
+          report = scan_public_github("https://github.com/octocat/Hello-World")
+          assert report["repository"] == "https://github.com/octocat/Hello-World"
+          assert report["path"] == "octocat/Hello-World"
+          assert isinstance(report["score"], int)
+          assert report["strategy"] in {"native", "hybrid", "proot"}
+          assert isinstance(report["findings"], list)
+          print(report)
+          PY
