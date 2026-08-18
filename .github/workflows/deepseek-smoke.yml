@@ -3,6 +3,8 @@ name: deepseek-harness-smoke
 on:
   push:
     branches: ["experiment/deepseek-harness"]
+  pull_request:
+    branches: ["hotfix/0.2.1"]
   workflow_dispatch:
 
 jobs:
@@ -44,6 +46,7 @@ jobs:
           test -s smoke-results/scan.json
           test -s smoke-results/termux-install.sh
           grep -q '^#!/data/data/com.termux/files/usr/bin/bash' smoke-results/termux-install.sh
+          grep -q 'pnpm install --frozen-lockfile' smoke-results/termux-install.sh
 
       - uses: actions/upload-artifact@v4
         if: always()
