@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070a09" />
+  <meta name="description" content="PocketPort checks whether desktop-first GitHub projects can run on Android and Termux." />
+  <title>PocketPort</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/refresh.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" type="button" data-nav="/" aria-label="PocketPort home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+        <span>PocketPort</span>
+      </button>
+      <button class="target-pill" type="button" data-nav="/target" aria-label="Target device settings">
+        <span class="target-dot"></span>
+        <span id="target-pill-text">Android · arm64</span>
+      </button>
+    </header>
+
+    <main id="app" tabindex="-1"></main>
+  </div>
+
+  <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+  <section id="sheet" class="sheet" aria-modal="true" role="dialog" hidden>
+    <div class="sheet-grabber"></div>
+    <div class="sheet-head">
+      <div>
+        <p id="sheet-kicker" class="eyebrow"></p>
+        <h2 id="sheet-title"></h2>
+      </div>
+      <button id="sheet-close" class="icon-button" type="button" aria-label="Close">×</button>
+    </div>
+    <div id="sheet-body" class="sheet-body"></div>
+  </section>
+
+  <script src="/adapter.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

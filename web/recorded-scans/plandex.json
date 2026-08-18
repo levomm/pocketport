@@ -1,0 +1,172 @@
+{
+  "path": "/tmp/plandex",
+  "stack": [
+    "docker-compose",
+    "go",
+    "docker"
+  ],
+  "score": 58,
+  "strategy": "hybrid",
+  "findings": [
+    {
+      "severity": "high",
+      "kind": "runtime",
+      "detail": "Docker Compose requires adaptation; no normal Docker daemon in stock Termux.",
+      "path": null,
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "runtime",
+      "detail": "Dockerfile found. PRoot-Distro can be a daemonless fallback.",
+      "path": null,
+      "scope": "build"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Docker Compose",
+      "path": "app/clear_local.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/clear_local.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/reset_local.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Docker Compose",
+      "path": "app/start_local.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Docker Compose",
+      "path": "app/start_local.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/start_local.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded bash path",
+      "path": "scripts/merge_from_reflog.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/scripts/litellm_deps.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/scripts/wait-for-it.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/scripts/dev.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": "app/cli/install.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/cli/install.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/cli/dev.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": "app/server/Dockerfile",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "app/server/syntax/file_map/examples/python_example.py",
+      "scope": "dev"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded bash path",
+      "path": "app/server/syntax/file_map/examples/bash_example.sh",
+      "scope": "dev"
+    }
+  ],
+  "components": [
+    {
+      "name": "app",
+      "role": "service-stack",
+      "path": "app",
+      "stack": [
+        "docker-compose",
+        "go"
+      ],
+      "score": 66,
+      "strategy": "hybrid"
+    },
+    {
+      "name": "cli",
+      "role": "client",
+      "path": "app/cli",
+      "stack": [
+        "go"
+      ],
+      "score": 98,
+      "strategy": "native"
+    },
+    {
+      "name": "server",
+      "role": "service",
+      "path": "app/server",
+      "stack": [
+        "go",
+        "docker"
+      ],
+      "score": 94,
+      "strategy": "native"
+    }
+  ]
+}
