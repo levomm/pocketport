@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 import os
 from pathlib import Path
@@ -64,12 +65,20 @@ def _print_report(report) -> None:
         print("No obvious Termux blockers found.")
 
 
+def _json_report(report) -> dict:
+    payload = report.to_dict()
+    components = assess_components(Path(report.path), report.findings)
+    if components:
+        payload["components"] = [asdict(component) for component in components]
+    return payload
+
+
 def cmd_scan(args) -> int:
     root, td = _resolve_target(args.target)
     try:
         report = scan(root)
         if args.json:
-            print(json.dumps(report.to_dict(), indent=2))
+            print(json.dumps(_json_report(report), indent=2))
         else:
             _print_report(report)
         return 0
