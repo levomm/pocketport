@@ -5,6 +5,7 @@ on:
     branches: ["main"]
     paths:
       - "pocketport/live_scan.py"
+      - "pocketport/execution.py"
       - "api/scan.py"
       - "web/adapter.js"
       - "vercel.json"
@@ -34,5 +35,14 @@ jobs:
           assert isinstance(report["score"], int)
           assert report["strategy"] in {"native", "hybrid", "proot"}
           assert isinstance(report["findings"], list)
+
+          plan = report["execution_plan"]
+          assert plan["status"] in {"ready", "installable", "fallback"}
+          assert plan["method"] in {"source", "proot"}
+          assert plan["target"]["platform"] == "android"
+          assert plan["target"]["arch"] == "aarch64"
+          assert isinstance(plan["install"], list)
+          assert isinstance(plan["run"], list)
+          assert isinstance(plan["component"], dict)
           print(report)
           PY
