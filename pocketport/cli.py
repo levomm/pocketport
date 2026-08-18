@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 
+from .bridge import DEFAULT_PORT, serve as serve_bridge
 from .components import assess_components
 from .doctor import inspect_runtime_capabilities
 from .execution import build_execution_plan
@@ -162,6 +163,15 @@ def cmd_run(args) -> int:
     return run_compat(command)
 
 
+def cmd_serve(args) -> int:
+    try:
+        serve_bridge(args.port)
+    except (OSError, ValueError) as exc:
+        print(f"PocketPort local bridge failed: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def cmd_asset(args) -> int:
     arch = normalize_arch(args.arch)
     try:
@@ -232,6 +242,10 @@ def build_parser():
     run = sub.add_parser("run", help="run a command with Termux runtime compatibility shims")
     run.add_argument("command_args", nargs=argparse.REMAINDER)
     run.set_defaults(func=cmd_run)
+
+    local = sub.add_parser("serve", help="start the read-only PocketPort bridge on localhost")
+    local.add_argument("--port", type=int, default=DEFAULT_PORT)
+    local.set_defaults(func=cmd_serve)
 
     asset = sub.add_parser("asset", help="choose the best GitHub release asset for Android/Termux")
     asset.add_argument("repo", help="owner/name or GitHub repository URL")
