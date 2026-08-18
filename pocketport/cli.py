@@ -47,7 +47,7 @@ def _print_report(report) -> None:
         print("")
         for f in report.findings[:50]:
             loc = f" [{f.path}]" if f.path else ""
-            print(f"- {f.severity.upper():6} {f.kind}: {f.detail}{loc}")
+            print(f"- {f.severity.upper():6} [{f.scope}] {f.kind}: {f.detail}{loc}")
     else:
         print("No obvious Termux blockers found.")
 
