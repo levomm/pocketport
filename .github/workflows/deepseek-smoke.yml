@@ -4,7 +4,7 @@ on:
   push:
     branches: ["experiment/deepseek-harness"]
   pull_request:
-    branches: ["hotfix/0.2.1"]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
