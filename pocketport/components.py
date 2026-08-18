@@ -21,6 +21,14 @@ COMPONENT_ROLES = {
     "app": "application",
 }
 
+# Conventional directories that directly contain real project components.
+# A random nested directory named `cli` or `server` should not become a
+# component just because its name matches the vocabulary. This matters for
+# source fixtures such as `server/syntax/file_map/cli`.
+COMPONENT_CONTAINERS = {
+    "apps", "packages", "services", "cmd", "src", "components", "modules",
+}
+
 MARKER_STACK = {
     "package.json": "node",
     "pyproject.toml": "python",
@@ -63,10 +71,18 @@ def _iter_markers(root: Path) -> Iterable[Path]:
         yield path
 
 
+def _is_component_boundary(candidate: Path, root: Path) -> bool:
+    parent = candidate.parent
+    if parent == root:
+        return True
+    parent_name = parent.name.lower()
+    return parent_name in COMPONENT_ROLES or parent_name in COMPONENT_CONTAINERS
+
+
 def _nearest_named_component(path: Path, root: Path) -> Path | None:
     current = path
     while current != root:
-        if current.name.lower() in COMPONENT_ROLES:
+        if current.name.lower() in COMPONENT_ROLES and _is_component_boundary(current, root):
             return current
         current = current.parent
     return None
