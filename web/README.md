@@ -1,20 +1,19 @@
-# PocketPort Web
+# PocketPort web UI
 
-Mobile-first interface for PocketPort Core.
+Mobile-first browser interface for PocketPort Core.
 
-This first pass is intentionally dependency-free and can be hosted as a static site. PocketPort Core remains the sole source of compatibility truth.
+PocketPort Core remains the source of compatibility truth. The web layer presents scanner output and does not recompute score, strategy, findings, or component assessments.
 
-## Data modes
+## Visual direction
 
-- `service`: set `window.__POCKETPORT_CONFIG__.scanUrl` before `adapter.js` to call a future hosted PocketPort scan endpoint.
-- `recorded`: exact JSON captured from the current PocketPort CLI for explicitly supported public repositories.
-- `unavailable`: unknown repositories show no fabricated verdict.
+The current prototype uses a graphite-black base with a restrained cold-green signal accent. The home screen is intentionally compact and tool-like: repository input first, one scan action, no landing-page feature clutter. Technical values use JetBrains Mono; prose uses Work Sans.
 
-## Local preview
+## Current scan sources
 
-```bash
-cd web
-python -m http.server 8080
-```
+- Future hosted PocketPort scan service through the adapter.
+- Exact recorded PocketPort CLI JSON for explicitly captured repositories.
+- Unknown repositories return `unavailable`; the UI never invents a verdict.
 
-Then open `http://localhost:8080`.
+## Static preview
+
+The directory is dependency-free and can be hosted as static files. `vercel.json` rewrites app routes to `index.html`.
