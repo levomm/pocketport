@@ -76,7 +76,9 @@ def test_bridge_has_no_state_changing_endpoint() -> None:
         )
         with pytest.raises(HTTPError) as exc:
             urlopen(request, timeout=2)
-        assert exc.value.code == 501
+        assert exc.value.code == 405
+        payload = json.loads(exc.value.read())
+        assert payload["code"] == "method_not_allowed"
     finally:
         server.shutdown()
         server.server_close()
@@ -85,4 +87,6 @@ def test_bridge_has_no_state_changing_endpoint() -> None:
 
 def test_invalid_port_is_rejected() -> None:
     with pytest.raises(ValueError):
-        create_server(0)
+        create_server(-1)
+    with pytest.raises(ValueError):
+        create_server(65536)
