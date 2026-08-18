@@ -1,0 +1,27 @@
+name: ui-bootstrap
+
+on:
+  push:
+    branches: ["feature/mobile-ui"]
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack mobile UI
+        run: |
+          mkdir -p web
+          tar -xzf .ui-bundle.tar.gz -C web
+          rm .ui-bundle.tar.gz
+      - name: Commit UI files
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "web: add mobile-first PocketPort interface"
+          git push
