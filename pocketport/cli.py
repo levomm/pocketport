@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 
+from .components import assess_components
 from .doctor import inspect_runtime_capabilities
 from .scanner import scan
 from .generator import write_generated
@@ -43,6 +44,17 @@ def _print_report(report) -> None:
     print(f"PocketPort score: {report.score}/100")
     print(f"Strategy: {report.strategy}")
     print(f"Stack: {', '.join(report.stack)}")
+
+    components = assess_components(Path(report.path), report.findings)
+    if components:
+        print("Components:")
+        for component in components[:12]:
+            stack = ", ".join(component.stack)
+            print(
+                f"- {component.name:12} [{component.role}] {component.strategy} "
+                f"{component.score}/100 | {stack} [{component.path}]"
+            )
+
     if report.findings:
         print("")
         for f in report.findings[:50]:
