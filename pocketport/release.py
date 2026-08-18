@@ -60,7 +60,7 @@ SOURCE_COMPONENT = re.compile(
     re.IGNORECASE,
 )
 SOURCE_ARCHIVE_SUFFIXES = (
-    ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar.zst", ".zip",
+    ".tar", ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar.zst", ".zip",
 )
 
 
