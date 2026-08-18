@@ -13,6 +13,7 @@ import tempfile
 
 from .components import assess_components
 from .doctor import inspect_runtime_capabilities
+from .execution import build_execution_plan
 from .scanner import scan
 from .generator import write_generated
 from .patcher import patch_repo
@@ -42,11 +43,12 @@ def _resolve_target(target: str):
 
 
 def _print_report(report) -> None:
+    root = Path(report.path)
     print(f"PocketPort score: {report.score}/100")
     print(f"Strategy: {report.strategy}")
     print(f"Stack: {', '.join(report.stack)}")
 
-    components = assess_components(Path(report.path), report.findings)
+    components = assess_components(root, report.findings)
     if components:
         print("Components:")
         for component in components[:12]:
@@ -55,6 +57,17 @@ def _print_report(report) -> None:
                 f"- {component.name:12} [{component.role}] {component.strategy} "
                 f"{component.score}/100 | {stack} [{component.path}]"
             )
+
+    plan = build_execution_plan(report, root)
+    print("Execution plan:")
+    print(
+        f"- {plan.status} | {plan.method} | {plan.component.name} "
+        f"[{plan.component.path}] | {plan.component.strategy}"
+    )
+    if plan.run:
+        print(f"- run: {plan.run[0]}")
+    else:
+        print("- run: unresolved")
 
     if report.findings:
         print("")
@@ -66,10 +79,12 @@ def _print_report(report) -> None:
 
 
 def _json_report(report) -> dict:
+    root = Path(report.path)
     payload = report.to_dict()
-    components = assess_components(Path(report.path), report.findings)
+    components = assess_components(root, report.findings)
     if components:
         payload["components"] = [asdict(component) for component in components]
+    payload["execution_plan"] = build_execution_plan(report, root).to_dict()
     return payload
 
 
@@ -128,7 +143,7 @@ def cmd_prepare(args) -> int:
     script = write_generated(after, root)
 
     print(f"Patched {len(patch.files_changed)} files ({len(patch.changes)} changes)")
-    print(f"Score: {before.score}/100 -> {after.score}/100")
+    print(f"Score: {before.score}/100 -> {after.score}")
     print(f"Strategy: {before.strategy} -> {after.strategy}")
     print(f"Wrote {script}")
     return 0
