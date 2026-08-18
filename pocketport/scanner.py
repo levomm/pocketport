@@ -134,6 +134,8 @@ def _scope_for_path(rel: str) -> str:
         return "metadata"
     if parts & DEV_DIRS:
         return "dev"
+    if lowered == "dockerfile" or lowered.startswith("dockerfile.") or lowered.endswith(".dockerfile"):
+        return "build"
     if any(token in lowered for token in ("build", "release", "publish", "packaging")):
         return "build"
     return "runtime"
