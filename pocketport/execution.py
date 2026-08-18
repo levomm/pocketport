@@ -26,6 +26,7 @@ class ExecutionPlan:
     target: dict[str, object]
     component: ExecutionComponent
     method: str
+    install_directory: str
     working_directory: str
     install: list[str]
     run: list[str]
@@ -45,42 +46,38 @@ ROLE_PRIORITY = {
     "repository": 0,
 }
 
+SURFACE_PRIORITY = {
+    "cli": 5,
+    "client": 4,
+    "app": 3,
+    "web": 2,
+    "api": 1,
+    "server": 0,
+}
+
 STRATEGY_PRIORITY = {
     "native": 3,
     "hybrid": 2,
     "proot": 1,
 }
 
+NODE_WORKSPACE_MARKERS = {
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+}
 
-def _component_key(component: ComponentAssessment) -> tuple[int, int, int, int]:
-    return (
-        STRATEGY_PRIORITY.get(component.strategy, 0),
-        ROLE_PRIORITY.get(component.role, 0),
-        component.score,
-        -component.path.count("/"),
-    )
 
-
-def _select_component(report: ScanReport, root: Path) -> ExecutionComponent:
-    components = assess_components(root, report.findings)
-    if components:
-        chosen = max(components, key=_component_key)
-        return ExecutionComponent(
-            name=chosen.name,
-            role=chosen.role,
-            path=chosen.path,
-            stack=list(chosen.stack),
-            score=chosen.score,
-            strategy=chosen.strategy,
-        )
-
+def _as_execution_component(component: ComponentAssessment) -> ExecutionComponent:
     return ExecutionComponent(
-        name=root.name or "repository",
-        role="repository",
-        path=".",
-        stack=list(report.stack),
-        score=report.score,
-        strategy=report.strategy,
+        name=component.name,
+        role=component.role,
+        path=component.path,
+        stack=list(component.stack),
+        score=component.score,
+        strategy=component.strategy,
     )
 
 
@@ -90,42 +87,70 @@ def _component_root(root: Path, component: ExecutionComponent) -> Path:
     return root / component.path
 
 
-def _node_package_manager(component_root: Path) -> str:
-    package_json = component_root / "package.json"
-    if package_json.exists():
-        try:
-            package_manager = str(json.loads(package_json.read_text("utf-8")).get("packageManager", ""))
-        except (OSError, json.JSONDecodeError):
-            package_manager = ""
-        if package_manager.startswith("pnpm@"):
-            return "pnpm"
-    if (component_root / "pnpm-lock.yaml").exists():
+def _relative(root: Path, path: Path) -> str:
+    rel = path.resolve().relative_to(root.resolve())
+    return "." if not rel.parts else rel.as_posix()
+
+
+def _read_package_json(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _node_package_manager(path: Path) -> str:
+    package = _read_package_json(path / "package.json")
+    package_manager = str(package.get("packageManager", ""))
+    if package_manager.startswith("pnpm@") or (path / "pnpm-lock.yaml").exists():
         return "pnpm"
     return "npm"
 
 
+def _node_workspace_root(root: Path, component_root: Path) -> Path:
+    current = component_root.resolve()
+    root = root.resolve()
+    while True:
+        package = _read_package_json(current / "package.json")
+        package_manager = str(package.get("packageManager", ""))
+        if package_manager or any((current / marker).exists() for marker in NODE_WORKSPACE_MARKERS):
+            return current
+        if current == root:
+            return component_root
+        if root not in current.parents:
+            return component_root
+        current = current.parent
+
+
 def _node_run_command(component_root: Path, component: ExecutionComponent) -> str | None:
-    package_json = component_root / "package.json"
-    try:
-        package = json.loads(package_json.read_text("utf-8"))
-    except (OSError, json.JSONDecodeError):
+    package = _read_package_json(component_root / "package.json")
+    if not package:
         return None
 
     package_manager = _node_package_manager(component_root)
     bin_value = package.get("bin")
     bin_name: str | None = None
+    bin_target: str | None = None
+
     if isinstance(bin_value, str):
         package_name = str(package.get("name", "")).strip()
         if package_name:
             bin_name = package_name.rsplit("/", 1)[-1]
+            bin_target = bin_value
     elif isinstance(bin_value, dict):
-        names = [str(name) for name, target in bin_value.items() if isinstance(target, str)]
-        if component.name in names:
-            bin_name = component.name
-        elif names:
-            bin_name = sorted(names)[0]
+        entries = [
+            (str(name), str(target))
+            for name, target in bin_value.items()
+            if isinstance(name, str) and isinstance(target, str)
+        ]
+        if entries:
+            chosen = next((entry for entry in entries if entry[0] == component.name), None)
+            if chosen is None:
+                chosen = sorted(entries)[0]
+            bin_name, bin_target = chosen
 
-    if bin_name:
+    if bin_name and bin_target and (component_root / bin_target).is_file():
         if package_manager == "pnpm":
             return f"pnpm exec {bin_name}"
         return f"npx --no-install {bin_name}"
@@ -209,6 +234,42 @@ def _detect_run_command(component_root: Path, component: ExecutionComponent) -> 
     return None
 
 
+def _component_key(component: ComponentAssessment, root: Path) -> tuple[int, int, int, int, int, int]:
+    execution = _as_execution_component(component)
+    component_root = _component_root(root, execution)
+    launchable = int(_detect_run_command(component_root, execution) is not None)
+    return (
+        launchable,
+        STRATEGY_PRIORITY.get(component.strategy, 0),
+        ROLE_PRIORITY.get(component.role, 0),
+        SURFACE_PRIORITY.get(component.name.lower(), 0),
+        component.score,
+        -component.path.count("/"),
+    )
+
+
+def _select_component(report: ScanReport, root: Path) -> ExecutionComponent:
+    components = assess_components(root, report.findings)
+    if components:
+        chosen = max(components, key=lambda component: _component_key(component, root))
+        return _as_execution_component(chosen)
+
+    return ExecutionComponent(
+        name=root.name or "repository",
+        role="repository",
+        path=".",
+        stack=list(report.stack),
+        score=report.score,
+        strategy=report.strategy,
+    )
+
+
+def _install_root(root: Path, component_root: Path, component: ExecutionComponent) -> Path:
+    if "node" in component.stack:
+        return _node_workspace_root(root, component_root)
+    return component_root
+
+
 def _component_findings(report: ScanReport, component: ExecutionComponent) -> list[Finding]:
     if component.path in {"", "."}:
         return list(report.findings)
@@ -253,6 +314,7 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
     root = root.resolve()
     component = _select_component(report, root)
     component_root = _component_root(root, component)
+    install_root = _install_root(root, component_root, component)
     compatibility, notes = _compatibility_actions(report, component)
 
     if component.strategy == "proot":
@@ -261,6 +323,7 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
             target={"platform": "android", "termux": True, "arch": "aarch64"},
             component=component,
             method="proot",
+            install_directory=".",
             working_directory=component.path,
             install=_proot_install_commands(),
             run=[],
@@ -269,16 +332,20 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
         )
 
     component_report = ScanReport(
-        path=str(component_root),
+        path=str(install_root),
         stack=list(component.stack),
         score=component.score,
         strategy=component.strategy,
         findings=_component_findings(report, component),
     )
-    install = _native_commands(component_report, component_root)
+    install = _native_commands(component_report, install_root)
     run_command = _detect_run_command(component_root, component)
     run = [f"pocketport run -- {run_command}"] if run_command else []
     status = "ready" if run else "installable"
+
+    install_directory = _relative(root, install_root)
+    if install_root != component_root:
+        notes.append(f"Dependencies are installed from workspace root `{install_directory}` before entering `{component.path}`.")
     if not run:
         notes.append("Install path is known, but PocketPort did not find a trustworthy launch command in project metadata.")
 
@@ -287,6 +354,7 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
         target={"platform": "android", "termux": True, "arch": "aarch64"},
         component=component,
         method="source",
+        install_directory=install_directory,
         working_directory=component.path,
         install=install,
         run=run,
