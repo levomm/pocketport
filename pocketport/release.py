@@ -47,10 +47,16 @@ METADATA_TRAILER = re.compile(
     r"(?:^|[-_.])(?:checksums?|(?:sha(?:1|224|256|384|512)|md5|b2)sums?)(?:\.(?:txt|json))?$",
     re.IGNORECASE,
 )
+METADATA_DOCUMENT = re.compile(
+    r"(?:^|[-_.])(?:sbom|spdx|cyclonedx|cdx|provenance|attestations?|intoto)"
+    r"(?:\.(?:json|jsonl|xml|txt|yaml|yml))$",
+    re.IGNORECASE,
+)
 FOREIGN_OS_COMPONENT = re.compile(
     r"(?:^|[-_.])(?:"
     r"windows|win(?:32|64)?|mingw(?:32|64)?|cygwin|msys2?|msvc|"
     r"darwin(?:32|64|amd64|arm64)?|macosx?|osx|"
+    r"ios|iphoneos|tvos|watchos|"
     r"freebsd|openbsd|netbsd|dragonfly|solaris|illumos|aix"
     r")(?=$|[-_.])",
     re.IGNORECASE,
@@ -59,8 +65,12 @@ SOURCE_COMPONENT = re.compile(
     r"(?:^|[-_.])(?:sources?|srcs?)(?=$|[-_.])",
     re.IGNORECASE,
 )
-SOURCE_ARCHIVE_SUFFIXES = (
-    ".tar", ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar.zst", ".zip",
+ARCHIVE_SUFFIX = re.compile(
+    r"(?:"
+    r"\.tar(?:\.(?:gz|xz|bz2|zst|lz|lzma|lzo|br))?|"
+    r"\.(?:tgz|txz|tbz2?|tzst|tlz|zip|7z)"
+    r")$",
+    re.IGNORECASE,
 )
 
 
@@ -102,7 +112,11 @@ def _present_arches(name: str) -> set[str]:
 
 def _is_metadata_asset(name: str) -> bool:
     n = name.lower()
-    return bool(METADATA_SUFFIX.search(n) or METADATA_TRAILER.search(n))
+    return bool(
+        METADATA_SUFFIX.search(n)
+        or METADATA_TRAILER.search(n)
+        or METADATA_DOCUMENT.search(n)
+    )
 
 
 def _is_wrong_os(name: str) -> bool:
@@ -115,10 +129,7 @@ def _is_wrong_os(name: str) -> bool:
 
 def _is_source_archive(name: str) -> bool:
     n = name.lower()
-    return bool(
-        SOURCE_COMPONENT.search(n)
-        and n.endswith(SOURCE_ARCHIVE_SUFFIXES)
-    )
+    return bool(SOURCE_COMPONENT.search(n) and ARCHIVE_SUFFIX.search(n))
 
 
 def _arch_compatible(name: str, arch: str) -> bool:
@@ -147,7 +158,7 @@ def _asset_score(name: str, arch: str) -> tuple[int, list[str]]:
         score += 20
         reasons.append("linux")
 
-    if any(n.endswith(ext) for ext in (".tar.gz", ".tgz", ".tar.xz", ".zip")):
+    if ARCHIVE_SUFFIX.search(n):
         score += 8
         reasons.append("archive")
     if n.endswith(".deb"):
