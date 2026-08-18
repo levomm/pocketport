@@ -13,17 +13,36 @@ const { syncBuiltinESMExports } = require('node:module')
 if (!globalThis.__pocketportAtomicPublishShim) {
   const originalLink = fsp.link.bind(fsp)
 
+  function looksLikeAtomicPublish(existingPath, newPath) {
+    const sourceDir = path.dirname(existingPath)
+    const targetDir = path.dirname(newPath)
+    const sourceName = path.basename(existingPath)
+    const targetName = path.basename(newPath)
+
+    // Common atomic-publish shape: <target>.<random>.tmp beside <target>.
+    const sameDirTemp = sourceDir === targetDir
+      && sourceName.startsWith(`${targetName}.`)
+      && sourceName.endsWith('.tmp')
+
+    // DeepSeek fs-local guarded-create shape:
+    //   .<target>.<pid>.<uuid>.tmpdir/<target>.tmp -> <target>
+    // Keep this deliberately narrow so ordinary hard-link semantics are not
+    // silently replaced by copies on Android.
+    const stagingDirName = path.basename(sourceDir)
+    const stagedTemp = path.dirname(sourceDir) === targetDir
+      && sourceName === `${targetName}.tmp`
+      && stagingDirName.startsWith(`.${targetName}.`)
+      && stagingDirName.endsWith('.tmpdir')
+
+    return sameDirTemp || stagedTemp
+  }
+
   fsp.link = async function pocketportLink(existingPath, newPath) {
     try {
       return await originalLink(existingPath, newPath)
     } catch (error) {
       const code = error && error.code
-      const sameDir = path.dirname(existingPath) === path.dirname(newPath)
-      const sourceName = path.basename(existingPath)
-      const targetName = path.basename(newPath)
-      const looksLikeAtomicTemp = sourceName.startsWith(`${targetName}.`) && sourceName.endsWith('.tmp')
-
-      if ((code === 'EACCES' || code === 'EPERM') && sameDir && looksLikeAtomicTemp) {
+      if ((code === 'EACCES' || code === 'EPERM') && looksLikeAtomicPublish(existingPath, newPath)) {
         return fsp.copyFile(existingPath, newPath, fs.constants.COPYFILE_EXCL)
       }
       throw error
