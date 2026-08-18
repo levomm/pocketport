@@ -1,0 +1,33 @@
+name: ui-recorded-scans
+
+on:
+  push:
+    branches: ["feature/mobile-ui"]
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PocketPort
+        run: python -m pip install -e .
+      - name: Clone targets
+        run: |
+          git clone --depth 1 https://github.com/deepseek-ai/deepseek-harness.git /tmp/deepseek-harness
+          git clone --depth 1 https://github.com/plandex-ai/plandex.git /tmp/plandex
+      - name: Capture exact PocketPort JSON
+        run: |
+          mkdir -p ui-scan-fixtures
+          pocketport scan /tmp/deepseek-harness --json > ui-scan-fixtures/deepseek-harness.json
+          pocketport scan /tmp/plandex --json > ui-scan-fixtures/plandex.json
+          python -m json.tool ui-scan-fixtures/deepseek-harness.json >/dev/null
+          python -m json.tool ui-scan-fixtures/plandex.json >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-recorded-scans
+          path: ui-scan-fixtures/*.json
