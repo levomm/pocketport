@@ -78,6 +78,17 @@ That path also publishes through a hard link. The first PocketPort shim intentio
 
 PocketPort was then extended to recognize this second staging pattern while keeping the fallback deliberately narrow. After reinstalling the updated experiment build, the Harness `write` and `read` tools succeeded without Bash or another shell workaround.
 
+## Runtime capability doctor
+
+The experiment now feeds the discovered host assumptions back into `pocketport doctor`. On Termux the doctor probes:
+
+- whether native hard-link publication works or is denied
+- whether Node `COPYFILE_EXCL` is available with no-clobber behavior
+- whether the PocketPort Node atomic-publish compatibility path succeeds
+- sandbox/confinement as a target-project-specific capability rather than pretending Android is just desktop Linux with a smaller screen
+
+This turns the manual `ln` and Node copy checks used during the investigation into reusable diagnostics for the next port.
+
 ## Sandbox limitation
 
 Harness `workspace-write` confinement was not usable on the validated Android/Termux host. Harness correctly failed closed and offered escalation.
@@ -104,7 +115,6 @@ This is the first PocketPort case where scanner findings, real Android execution
 
 ## Remaining work
 
-- add runtime capability probes to `pocketport doctor`
 - design a safer Termux approval/confinement fallback
 - distinguish runtime blockers from CI/build/dev-only findings in scanner scoring
 - turn validated compatibility results into reusable per-project recipes or registry entries
