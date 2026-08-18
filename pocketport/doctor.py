@@ -26,13 +26,42 @@ def _probe_native_hardlink(root: Path) -> RuntimeCapability:
     source = root / "hardlink-source"
     target = root / "hardlink-target"
     source.write_text("ok", encoding="utf-8")
-    try:
-        os.link(source, target)
-    except OSError as exc:
-        if exc.errno in {errno.EACCES, errno.EPERM}:
-            return RuntimeCapability("native hardlink", "denied", exc.strerror or str(exc))
-        return RuntimeCapability("native hardlink", "unavailable", f"{exc.__class__.__name__}: {exc}")
-    return RuntimeCapability("native hardlink", "ok", "link() succeeded")
+
+    link_fn = getattr(os, "link", None)
+    if link_fn is not None:
+        try:
+            link_fn(source, target)
+        except OSError as exc:
+            if exc.errno in {errno.EACCES, errno.EPERM}:
+                return RuntimeCapability("native hardlink", "denied", exc.strerror or str(exc))
+            return RuntimeCapability("native hardlink", "unavailable", f"{exc.__class__.__name__}: {exc}")
+        return RuntimeCapability("native hardlink", "ok", "link() succeeded")
+
+    # Some Android/Termux Python builds do not expose os.link at all even
+    # though the host still has the POSIX ln utility. Probe the actual host
+    # capability instead of treating a missing Python wrapper as the result.
+    ln = shutil.which("ln")
+    if not ln:
+        return RuntimeCapability(
+            "native hardlink",
+            "unavailable",
+            "Python os.link is unavailable and ln is not installed",
+        )
+
+    result = subprocess.run(
+        [ln, str(source), str(target)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return RuntimeCapability("native hardlink", "ok", "ln hard link succeeded")
+
+    detail = (result.stderr or result.stdout or f"exit {result.returncode}").strip()
+    lowered = detail.lower()
+    if "permission denied" in lowered or "operation not permitted" in lowered:
+        return RuntimeCapability("native hardlink", "denied", detail)
+    return RuntimeCapability("native hardlink", "unavailable", detail)
 
 
 def _probe_node_exclusive_copy(root: Path, env: dict[str, str]) -> RuntimeCapability:
