@@ -45,6 +45,19 @@ SKIP_DIRS = {
 
 SHELL_NAMES = {"Makefile", "Procfile"}
 SHELL_SUFFIXES = {".sh", ".bash", ".zsh"}
+SHELL_META = ("|", "&&", "||", ";", "$(", "`")
+SAFE_PACKAGE_FLAGS = {
+    "-y", "--yes", "--assume-yes", "-q", "--quiet", "--no-install-recommends",
+    "--no-cache",
+}
+UNSAFE_SUDO_COMMAND_PREFIXES = ("-", "#", ">", "<", "|", "&", ";", "(", ")", "{", "}", "!")
+SAFE_SUDO_COMMANDS = {
+    "apk", "apt", "apt-get", "cargo", "chmod", "clang", "clang++", "cmake", "cp",
+    "curl", "dnf", "find", "g++", "gcc", "git", "go", "grep", "install", "ln",
+    "make", "mkdir", "mv", "ninja", "node", "npm", "pip", "pip3", "pkg", "pnpm",
+    "python", "python3", "rm", "rustc", "sed", "tar", "termux-open", "touch", "unzip",
+    "wget", "xdg-open", "yum", "yarn", "zip",
+}
 
 
 @dataclass
@@ -70,13 +83,25 @@ class PatchReport:
 def _translate_packages(tokens: list[str]) -> list[str]:
     out: list[str] = []
     for token in tokens:
-        if not token or token.startswith("-"):
-            continue
         mapped = PACKAGE_MAP.get(token, [token])
         for package in mapped:
             if package not in out:
                 out.append(package)
     return out
+
+
+def _split_safe_package_args(rest: str) -> list[str] | None:
+    if any(x in rest for x in SHELL_META):
+        return None
+
+    packages: list[str] = []
+    for token in rest.split():
+        if token.startswith("-"):
+            if token not in SAFE_PACKAGE_FLAGS:
+                return None
+            continue
+        packages.append(token)
+    return packages
 
 
 def _patch_package_line(line: str) -> tuple[str, str | None]:
@@ -93,23 +118,82 @@ def _patch_package_line(line: str) -> tuple[str, str | None]:
         return line, None
 
     action = match.group("action")
+    rest = match.group("rest").strip()
+    args = _split_safe_package_args(rest)
+    if args is None:
+        return line, None
+
     if action in {"update", "upgrade"}:
+        if args:
+            return line, None
         replacement = f"{match.group('indent')}pkg {'upgrade' if action == 'upgrade' else 'update'} -y"
         return replacement + newline, "package-manager"
 
-    rest = match.group("rest").strip()
-    if any(x in rest for x in ("|", "&&", "||", ";", "$(", "`")):
+    if not args:
         return line, None
 
-    packages = _translate_packages(rest.split())
-    if not packages:
-        return line, None
-
+    packages = _translate_packages(args)
     replacement = f"{match.group('indent')}pkg install -y {' '.join(packages)}"
     return replacement + newline, "package-manager"
 
 
-def _patch_shell_text(text: str) -> tuple[str, list[tuple[str, str, str]], list[str]]:
+def _replace_command_prefix(line: str, old: str, new: str) -> str:
+    pattern = rf"^(?P<indent>\s*){re.escape(old)}(?P<sep>\s+|$)"
+
+    def repl(match: re.Match[str]) -> str:
+        indent = match.group("indent")
+        sep = match.group("sep")
+        return f"{indent}{new}{sep}"
+
+    return re.sub(pattern, repl, line, count=1)
+
+
+def _safe_to_strip_sudo(command: str) -> bool:
+    if command in SAFE_SUDO_COMMANDS:
+        return True
+    return command.startswith(("/", "./", "../")) and len(command) > 1
+
+
+def _remove_sudo_prefix(line: str) -> str:
+    newline = "\n" if line.endswith("\n") else ""
+    body = line[:-1] if newline else line
+    match = re.match(r"^(?P<indent>[ \t]*)sudo[ \t]+(?P<rest>\S.*)$", body)
+    if not match:
+        return line
+    rest = match.group("rest")
+    command = rest.split(None, 1)[0]
+    if rest.startswith(UNSAFE_SUDO_COMMAND_PREFIXES) or not _safe_to_strip_sudo(command):
+        return line
+    return f"{match.group('indent')}{rest}{newline}"
+
+
+def _patch_shebang(line: str) -> str | None:
+    newline = "\n" if line.endswith("\n") else ""
+    body = line[:-1] if newline else line
+    match = re.match(
+        r"^#!\s*/(?:usr/)?bin/(?:env\s+)?bash\b(?P<args>.*)$",
+        body,
+    )
+    if not match:
+        return None
+    return f"#!{TERMUX_PREFIX}/bin/bash{match.group('args')}{newline}"
+
+
+def _unwrap_make_recipe(line: str) -> tuple[str, str]:
+    newline = "\n" if line.endswith("\n") else ""
+    body = line[:-1] if newline else line
+    match = re.match(
+        r"^(?P<prefix>\t[ \t]*(?:[@+\-][ \t]*)+)(?P<body>.*)$",
+        body,
+    )
+    if not match:
+        return "", line
+    return match.group("prefix"), match.group("body") + newline
+
+
+def _patch_shell_text(
+    text: str, *, makefile: bool = False
+) -> tuple[str, list[tuple[str, str, str]], list[str]]:
     changes: list[tuple[str, str, str]] = []
     warnings: list[str] = []
     lines = text.splitlines(keepends=True)
@@ -117,31 +201,35 @@ def _patch_shell_text(text: str) -> tuple[str, list[tuple[str, str, str]], list[
 
     for i, line in enumerate(lines):
         original = line
-        patched = line
+        recipe_prefix, work = _unwrap_make_recipe(line) if makefile else ("", line)
+        patched_work = work
         rule = None
 
-        if i == 0 and re.match(r"^#!\s*/(?:usr/)?bin/(?:env\s+)?bash\b", patched):
-            nl = "\n" if patched.endswith("\n") else ""
-            patched = f"#!{TERMUX_PREFIX}/bin/bash{nl}"
-            rule = "termux-shebang"
-        else:
-            complex_shell = any(x in patched for x in ("|", "&&", "||", ";", "$(", "`"))
+        if i == 0 and not recipe_prefix:
+            shebang = _patch_shebang(patched_work)
+            if shebang is not None:
+                patched_work = shebang
+                rule = "termux-shebang"
+
+        if patched_work == work or i != 0:
+            complex_shell = any(x in patched_work for x in SHELL_META)
             if not complex_shell:
-                candidate, package_rule = _patch_package_line(patched)
+                candidate, package_rule = _patch_package_line(patched_work)
                 if package_rule:
-                    patched = candidate
+                    patched_work = candidate
                     rule = package_rule
 
-                new = re.sub(r"(?<![\w-])sudo\s+", "", patched)
-                if new != patched:
-                    patched = new
+                new = _remove_sudo_prefix(patched_work)
+                if new != patched_work:
+                    patched_work = new
                     rule = rule or "remove-sudo"
 
-                new = re.sub(r"(?<![\w-])xdg-open\b", "termux-open", patched)
-                if new != patched:
-                    patched = new
+                new = _replace_command_prefix(patched_work, "xdg-open", "termux-open")
+                if new != patched_work:
+                    patched_work = new
                     rule = rule or "termux-open"
 
+        patched = recipe_prefix + patched_work
         if patched != original:
             changes.append((rule or "shell", original.rstrip("\n"), patched.rstrip("\n")))
         if "systemctl" in patched:
@@ -170,8 +258,9 @@ def _patch_package_json(path: Path) -> tuple[str | None, list[tuple[str, str, st
         if not isinstance(value, str):
             continue
         original = value
-        value = re.sub(r"(?<![\w-])sudo\s+", "", value)
-        value = re.sub(r"(?<![\w-])xdg-open\b", "termux-open", value)
+        if not any(x in value for x in SHELL_META):
+            value = _remove_sudo_prefix(value)
+            value = _replace_command_prefix(value, "xdg-open", "termux-open")
         if "systemctl" in value:
             warnings.append(f"package.json script '{name}' still uses systemctl")
         if value != original:
@@ -214,7 +303,9 @@ def patch_repo(root: Path, *, dry_run: bool = False, backup: bool = False) -> Pa
                 warnings.extend(f"{rel}: {w}" for w in local_warnings)
                 continue
         else:
-            patched, local_changes, local_warnings = _patch_shell_text(original)
+            patched, local_changes, local_warnings = _patch_shell_text(
+                original, makefile=path.name == "Makefile"
+            )
 
         warnings.extend(f"{rel}: {w}" for w in local_warnings)
         if patched == original:

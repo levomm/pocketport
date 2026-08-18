@@ -18,7 +18,7 @@ cd pocketport
 python -m pip install -e .
 ```
 
-## PocketPort 0.2
+## PocketPort 0.2.1
 
 ### Inspect the phone
 
@@ -62,14 +62,15 @@ pocketport patch .
 
 Current safe auto-patches include:
 
-- `/bin/bash` or `/usr/bin/env bash` shebang -> Termux bash
-- `sudo` removal in shell/package scripts
+- `/bin/bash` or `/usr/bin/env bash` shebang -> Termux bash while preserving interpreter arguments
+- conservative `sudo` removal only before known external commands or explicit executable paths
 - `xdg-open` -> `termux-open`
 - simple `apt`, `apt-get`, `dnf`, `yum`, `apk` install/update commands -> `pkg`
 - common package translations such as `build-essential -> clang make pkg-config`, `python3 -> python`, `libssl-dev -> openssl`
-- npm `package.json` scripts using `sudo` or `xdg-open`
+- standard Make recipe control prefixes such as `@`, `-` and `+`
+- npm `package.json` scripts when the rewrite is unambiguous
 
-PocketPort deliberately refuses to rewrite complex shell expressions containing pipes, command substitution or chained commands. A patcher that confidently destroys working projects is not automation, it is vandalism with branding.
+PocketPort deliberately leaves ambiguous `sudo` forms, shell builtins/keywords, unknown commands, package-manager options with values, and complex shell expressions untouched. Pipes, command substitution and chained commands are not rewritten blindly. A patcher that confidently destroys working projects is not automation, it is vandalism with branding.
 
 Patch details are written to:
 
@@ -99,13 +100,14 @@ pocketport asset owner/repo
 pocketport asset owner/repo --tag v1.2.3
 ```
 
-PocketPort normalizes Android ARM64 to `aarch64`, queries GitHub Releases and scores assets by:
+PocketPort normalizes common CPU architecture spellings, queries GitHub Releases and filters candidates before scoring them. It prefers:
 
-- `aarch64` / `arm64` architecture
-- Android / Termux preference
-- Linux fallback
-- archive format
-- rejection of x86, Windows/macOS, source archives and checksum files
+- the requested architecture such as `aarch64` / `arm64`
+- Android / Termux assets
+- Linux fallbacks
+- usable archive formats
+
+It rejects known wrong architectures, Windows/macOS/BSD and other foreign-OS assets, checksum/signature metadata, and obvious source archives before returning a candidate.
 
 It respects `GITHUB_TOKEN` or `GH_TOKEN` when set.
 
@@ -138,15 +140,17 @@ PocketPort therefore treats PRoot as a fallback, not as a lie that every Linux p
 - generated Termux installer
 - local environment doctor
 
-### 0.2
+### 0.2 / 0.2.1
 
 - safe auto-patch engine
 - distro package-manager -> Termux `pkg` translation
 - package-name translation map
 - architecture assumption detection
-- ARM64/aarch64 GitHub release asset selector
+- architecture-aware GitHub release asset selector
 - `patch` and `prepare` commands
 - machine-readable patch report
+- conservative patch safety rules and regression coverage
+- GitHub Actions pytest gate on Python 3.10 and 3.12
 
 ### 0.3 next
 
