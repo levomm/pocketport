@@ -22,14 +22,14 @@
 
   async function scanRepository(repoRef, signal) {
     const config = window.__POCKETPORT_CONFIG__ || {};
-    if (config.scanUrl) {
+    const scanUrl = config.scanUrl === false ? null : (config.scanUrl || '/api/scan');
+    let serviceReason = 'PocketPort scanner service could not be reached.';
+
+    if (scanUrl) {
       try {
-        const response = await fetch(config.scanUrl, {
+        const response = await fetch(scanUrl, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(config.scanToken ? { authorization: `Bearer ${config.scanToken}` } : {}),
-          },
+          headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ repository: repoRef.url }),
           signal,
         });
@@ -37,6 +37,10 @@
           const report = await response.json();
           return { source: 'service', repo: repoRef, report };
         }
+
+        const errorPayload = await response.json().catch(() => null);
+        if (errorPayload && errorPayload.error) serviceReason = errorPayload.error;
+        else serviceReason = `PocketPort scanner returned HTTP ${response.status}.`;
       } catch (error) {
         if (error && error.name === 'AbortError') throw error;
       }
@@ -53,7 +57,7 @@
     return {
       source: 'unavailable',
       repo: repoRef,
-      reason: 'PocketPort scanner service is not connected for this repository yet.',
+      reason: serviceReason,
     };
   }
 
