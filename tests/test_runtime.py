@@ -26,7 +26,7 @@ def test_non_termux_env_is_unchanged(tmp_path: Path):
     assert not (tmp_path / ".pocketport").exists()
 
 
-def test_shim_only_falls_back_for_atomic_publish_shapes(tmp_path: Path):
+def test_shim_only_falls_back_for_known_atomic_publish_shapes(tmp_path: Path):
     shim = ensure_node_atomic_publish_shim(tmp_path).read_text("utf-8")
 
     assert "code === 'EACCES' || code === 'EPERM'" in shim
