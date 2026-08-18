@@ -143,7 +143,7 @@ def cmd_prepare(args) -> int:
     script = write_generated(after, root)
 
     print(f"Patched {len(patch.files_changed)} files ({len(patch.changes)} changes)")
-    print(f"Score: {before.score}/100 -> {after.score}")
+    print(f"Score: {before.score}/100 -> {after.score}/100")
     print(f"Strategy: {before.strategy} -> {after.strategy}")
     print(f"Wrote {script}")
     return 0
