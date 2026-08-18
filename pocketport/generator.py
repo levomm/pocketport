@@ -1,10 +1,32 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
 from .scanner import ScanReport
 
 
-def _native_commands(report: ScanReport) -> list[str]:
+def _node_install_commands(root: Path | None) -> list[str]:
+    if root is not None:
+        package_json = root / "package.json"
+        package_manager = ""
+        if package_json.exists():
+            try:
+                package_manager = str(json.loads(package_json.read_text("utf-8")).get("packageManager", ""))
+            except (OSError, json.JSONDecodeError):
+                package_manager = ""
+
+        if (root / "pnpm-lock.yaml").exists() or package_manager.startswith("pnpm@"):
+            pnpm_spec = package_manager if package_manager.startswith("pnpm@") else "pnpm"
+            return [
+                f"npm install -g {pnpm_spec}",
+                "pnpm install --frozen-lockfile",
+            ]
+
+    return ['if [ -f package-lock.json ]; then npm ci; else npm install; fi']
+
+
+def _native_commands(report: ScanReport, root: Path | None = None) -> list[str]:
     stack = set(report.stack)
     pkgs = ["git"]
     commands = []
@@ -32,7 +54,7 @@ def _native_commands(report: ScanReport) -> list[str]:
             'if [ -f requirements.txt ]; then python -m pip install -U pip setuptools wheel; python -m pip install -r requirements.txt; fi',
         ]
     if "node" in stack:
-        commands.append('if [ -f package-lock.json ]; then npm ci; else npm install; fi')
+        commands.extend(_node_install_commands(root))
     if "rust" in stack:
         commands.append('cargo build --release')
     if "go" in stack:
@@ -41,8 +63,8 @@ def _native_commands(report: ScanReport) -> list[str]:
     return commands
 
 
-def render_install_script(report: ScanReport) -> str:
-    native = "\n".join(_native_commands(report))
+def render_install_script(report: ScanReport, root: Path | None = None) -> str:
+    native = "\n".join(_native_commands(report, root))
     fallback = r'''echo "[PocketPort] Native install may fail. Preparing PRoot fallback..."
 pkg install -y proot-distro git
 if ! proot-distro list | grep -q 'ubuntu'; then
@@ -89,10 +111,9 @@ def write_generated(report: ScanReport, root: Path) -> Path:
     out = root / ".pocketport"
     out.mkdir(parents=True, exist_ok=True)
 
-    import json
     (out / "report.json").write_text(json.dumps(report.to_dict(), indent=2), "utf-8")
 
     script = root / "termux-install.sh"
-    script.write_text(render_install_script(report), "utf-8")
+    script.write_text(render_install_script(report, root), "utf-8")
     script.chmod(0o755)
     return script
