@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 
@@ -57,6 +58,12 @@ if (!globalThis.__pocketportAtomicPublishShim) {
 '''
 
 
+ANDROID_LINKER_MARKERS = (
+    b"/system/bin/linker",
+    b"/apex/com.android.runtime/bin/linker",
+)
+
+
 def is_termux(env: dict[str, str] | None = None) -> bool:
     source = os.environ if env is None else env
     return "com.termux" in source.get("PREFIX", "")
@@ -86,7 +93,81 @@ def compat_env(env: dict[str, str] | None = None, *, home: Path | None = None) -
     return result
 
 
+def _resolve_executable(command: list[str], env: dict[str, str]) -> Path | None:
+    raw = command[0]
+    if "/" in raw:
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        return candidate.resolve(strict=False)
+
+    found = shutil.which(raw, path=env.get("PATH"))
+    return Path(found).resolve(strict=False) if found else None
+
+
+def _linux_release_elf(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(65536)
+    except OSError:
+        return False
+
+    if not head.startswith(b"\x7fELF"):
+        return False
+    return not any(marker in head for marker in ANDROID_LINKER_MARKERS)
+
+
+def _nonempty_file(path: Path) -> bool:
+    try:
+        return path.is_file() and bool(path.read_text("utf-8", errors="ignore").strip())
+    except OSError:
+        return False
+
+
+def prepare_linux_release_compat(
+    command: list[str],
+    env: dict[str, str],
+    *,
+    system_resolv: Path = Path("/etc/resolv.conf"),
+    proot_executable: str | None = None,
+) -> tuple[list[str], dict[str, str]]:
+    """Adapt desktop Linux ELF releases to Termux without entering a full distro.
+
+    Android does not normally expose the resolver and CA files at the desktop
+    Linux paths many static Go/Rust releases expect. For non-Android ELF
+    executables, PocketPort can overlay Termux's resolver with PRoot and point
+    common TLS stacks at Termux's CA bundle. Native Android/Termux ELF binaries
+    are left alone.
+    """
+    result_env = dict(env)
+    if not command or not is_termux(result_env):
+        return list(command), result_env
+
+    executable = _resolve_executable(command, result_env)
+    if executable is None or not _linux_release_elf(executable):
+        return list(command), result_env
+
+    prefix = Path(result_env["PREFIX"])
+    cert_bundle = prefix / "etc" / "tls" / "cert.pem"
+    if cert_bundle.is_file() and "SSL_CERT_FILE" not in result_env:
+        result_env["SSL_CERT_FILE"] = str(cert_bundle)
+        result_env["POCKETPORT_TERMUX_CA_BUNDLE"] = "1"
+
+    prepared = list(command)
+    termux_resolv = prefix / "etc" / "resolv.conf"
+    if not _nonempty_file(system_resolv) and _nonempty_file(termux_resolv):
+        proot = proot_executable or shutil.which("proot", path=result_env.get("PATH"))
+        if proot:
+            prepared = [proot, "-b", f"{termux_resolv}:/etc/resolv.conf", *prepared]
+            result_env["POCKETPORT_TERMUX_DNS_OVERLAY"] = "1"
+
+    return prepared, result_env
+
+
 def run_compat(command: list[str], *, env: dict[str, str] | None = None) -> int:
     if not command:
         raise ValueError("command must not be empty")
-    return subprocess.run(command, env=compat_env(env), check=False).returncode
+
+    runtime_env = compat_env(env)
+    prepared_command, runtime_env = prepare_linux_release_compat(command, runtime_env)
+    return subprocess.run(prepared_command, env=runtime_env, check=False).returncode
