@@ -59,8 +59,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
     server_version = "PocketPortBridge/1"
 
     def log_message(self, format: str, *args: object) -> None:
-        # Avoid writing browser probes into normal CLI output. Operational
-        # logging can be added later when the bridge grows state-changing APIs.
+        # Browser discovery can probe health repeatedly. Keep normal CLI output
+        # readable; structured operational logging can come with mutable APIs.
         return
 
     def _path(self) -> str:
@@ -84,14 +84,18 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def _origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin")
+        if origin and _allowed_origin(origin) is None:
+            self._send_json(403, {"error": "origin not allowed", "code": "origin_denied"})
+            return False
+        return True
+
     def do_OPTIONS(self) -> None:
         if self._path() not in {"/health", "/api/health"}:
             self._send_json(404, {"error": "not found", "code": "not_found"})
             return
-
-        origin = self.headers.get("Origin")
-        if origin and _allowed_origin(origin) is None:
-            self._send_json(403, {"error": "origin not allowed", "code": "origin_denied"})
+        if not self._origin_allowed():
             return
         self._send_json(204, {})
 
@@ -99,23 +103,31 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if self._path() not in {"/health", "/api/health"}:
             self._send_json(404, {"error": "not found", "code": "not_found"})
             return
-
-        origin = self.headers.get("Origin")
-        if origin and _allowed_origin(origin) is None:
-            self._send_json(403, {"error": "origin not allowed", "code": "origin_denied"})
+        if not self._origin_allowed():
             return
         self._send_json(200, health_payload())
 
+    def do_POST(self) -> None:
+        self._send_json(405, {
+            "error": "local bridge is read-only in API v1",
+            "code": "method_not_allowed",
+        })
+
 
 def create_server(port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
-    if not isinstance(port, int) or not 1 <= port <= 65535:
-        raise ValueError("port must be between 1 and 65535")
+    # Port 0 is accepted internally so tests can ask the OS for an ephemeral
+    # port. The public CLI rejects it because users need a stable URL.
+    if not isinstance(port, int) or not 0 <= port <= 65535:
+        raise ValueError("port must be between 0 and 65535")
     server = ThreadingHTTPServer((DEFAULT_HOST, port), BridgeHandler)
     server.daemon_threads = True
     return server
 
 
 def serve(port: int = DEFAULT_PORT) -> None:
+    if not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValueError("port must be between 1 and 65535")
+
     server = create_server(port)
     actual_port = server.server_address[1]
     print(f"[PocketPort] local bridge: http://{DEFAULT_HOST}:{actual_port}")
