@@ -14,6 +14,7 @@ from .scanner import scan
 from .generator import write_generated
 from .patcher import patch_repo
 from .release import choose_release_asset, normalize_arch
+from .runtime import run_compat
 
 
 def _clone(url: str, dest: Path) -> Path:
@@ -111,6 +112,19 @@ def cmd_prepare(args) -> int:
     return 0
 
 
+def cmd_run(args) -> int:
+    command = list(args.command_args)
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        print("Usage: pocketport run -- <command> [args...]", file=sys.stderr)
+        return 2
+
+    if "com.termux" in os.environ.get("PREFIX", ""):
+        print("[PocketPort] Termux runtime compatibility enabled")
+    return run_compat(command)
+
+
 def cmd_asset(args) -> int:
     arch = normalize_arch(args.arch)
     try:
@@ -172,6 +186,10 @@ def build_parser():
     prep.add_argument("path", nargs="?", default=".")
     prep.add_argument("--backup", action="store_true")
     prep.set_defaults(func=cmd_prepare)
+
+    run = sub.add_parser("run", help="run a command with Termux runtime compatibility shims")
+    run.add_argument("command_args", nargs=argparse.REMAINDER)
+    run.set_defaults(func=cmd_run)
 
     asset = sub.add_parser("asset", help="choose the best GitHub release asset for Android/Termux")
     asset.add_argument("repo", help="owner/name or GitHub repository URL")
