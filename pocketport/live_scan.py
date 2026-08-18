@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
-import json
 import re
 import shutil
 import tarfile
@@ -12,6 +11,7 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from .components import assess_components
+from .execution import build_execution_plan
 from .scanner import scan
 
 
@@ -197,6 +197,7 @@ def scan_public_github(repository: str) -> dict:
         components = assess_components(root, report.findings)
         if components:
             payload["components"] = [asdict(component) for component in components]
+        payload["execution_plan"] = build_execution_plan(report, root).to_dict()
 
         # A server-side /tmp path is meaningless to the browser and leaks an
         # implementation detail. Keep the existing field but make it stable.
