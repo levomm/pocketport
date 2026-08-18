@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 
+from .doctor import inspect_runtime_capabilities
 from .scanner import scan
 from .generator import write_generated
 from .patcher import patch_repo
@@ -160,6 +161,11 @@ def cmd_doctor(args) -> int:
         print(f"{cmd:13} {'ok' if shutil.which(cmd) else 'missing'}")
     if termux:
         print("PREFIX:", prefix)
+
+    print("\nRuntime capabilities:")
+    for capability in inspect_runtime_capabilities():
+        detail = f" - {capability.detail}" if capability.detail else ""
+        print(f"{capability.name:22} {capability.status}{detail}")
     return 0
 
 
