@@ -62,7 +62,7 @@ try {
         text=True,
         check=False,
     )
-    if result.returncode == 0 and target.read_text("utf-8") == "ok":
+    if result.returncode == 0 and target.exists() and target.read_text("utf-8") == "ok":
         return RuntimeCapability("Node exclusive copy", "ok", "COPYFILE_EXCL preserves no-clobber behavior")
     detail = (result.stderr or result.stdout or f"exit {result.returncode}").strip()
     return RuntimeCapability("Node exclusive copy", "unavailable", detail)
