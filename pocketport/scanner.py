@@ -11,6 +11,11 @@ TEXT_SUFFIXES = {
     ".json", ".toml", ".yaml", ".yml", ".ini", ".cfg",
 }
 
+IGNORED_DIRS = {
+    ".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build",
+    "tests", "test", "docs", ".pocketport",
+}
+
 HARD_BLOCKERS = {
     "nvidia/cuda": "CUDA base image",
     "nvidia-smi": "NVIDIA GPU tooling",
@@ -77,13 +82,23 @@ class ScanReport:
         return asdict(self)
 
 
-def _iter_text_files(root: Path) -> Iterable[Path]:
+def _is_ignored(path: Path, root: Path) -> bool:
+    try:
+        rel_parts = path.relative_to(root).parts
+    except ValueError:
+        return True
+    return any(part in IGNORED_DIRS for part in rel_parts)
+
+
+def _iter_repo_files(root: Path) -> Iterable[Path]:
     for p in root.rglob("*"):
-        if not p.is_file():
+        if not p.is_file() or _is_ignored(p, root):
             continue
-        rel_parts = p.relative_to(root).parts
-        if any(part in {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", "tests", "test", "docs", ".pocketport"} for part in rel_parts):
-            continue
+        yield p
+
+
+def _iter_text_files(root: Path) -> Iterable[Path]:
+    for p in _iter_repo_files(root):
         if p.name in {"Dockerfile", "Makefile", "Procfile"} or p.suffix.lower() in TEXT_SUFFIXES:
             try:
                 if p.stat().st_size <= 2_000_000:
@@ -100,23 +115,64 @@ def _read(path: Path) -> str:
 
 
 def _detect_stack(root: Path) -> list[str]:
-    stack = []
-    markers = [
-        ("package.json", "node"),
-        ("pyproject.toml", "python"),
-        ("requirements.txt", "python"),
-        ("Cargo.toml", "rust"),
-        ("go.mod", "go"),
-        ("Dockerfile", "docker"),
-        ("docker-compose.yml", "docker-compose"),
-        ("docker-compose.yaml", "docker-compose"),
-        ("compose.yml", "docker-compose"),
-        ("compose.yaml", "docker-compose"),
-    ]
-    for filename, name in markers:
-        if (root / filename).exists() and name not in stack:
+    marker_map = {
+        "package.json": "node",
+        "pyproject.toml": "python",
+        "requirements.txt": "python",
+        "Cargo.toml": "rust",
+        "go.mod": "go",
+        "Dockerfile": "docker",
+        "docker-compose.yml": "docker-compose",
+        "docker-compose.yaml": "docker-compose",
+        "compose.yml": "docker-compose",
+        "compose.yaml": "docker-compose",
+    }
+    stack: list[str] = []
+    for path in _iter_repo_files(root):
+        name = marker_map.get(path.name)
+        if name and name not in stack:
             stack.append(name)
     return stack or ["unknown"]
+
+
+def _scan_node_dependencies(root: Path, findings: list[Finding]) -> None:
+    for package_json in _iter_repo_files(root):
+        if package_json.name != "package.json":
+            continue
+        try:
+            pkg = json.loads(_read(package_json))
+        except json.JSONDecodeError:
+            findings.append(
+                Finding(
+                    "low",
+                    "parse",
+                    "package.json is not valid JSON.",
+                    str(package_json.relative_to(root)),
+                )
+            )
+            continue
+
+        deps = {}
+        for key in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+            value = pkg.get(key, {})
+            if isinstance(value, dict):
+                deps.update(value)
+
+        rel = str(package_json.relative_to(root))
+        for name, why in NODE_RISKY.items():
+            if name in deps:
+                findings.append(Finding("medium", "node-native", f"{name}: {why}", rel))
+
+
+def _scan_python_dependencies(root: Path, findings: list[Finding]) -> None:
+    blobs: list[str] = []
+    for path in _iter_repo_files(root):
+        if path.name in {"requirements.txt", "pyproject.toml"}:
+            blobs.append(_read(path).lower())
+    py_blob = "\n".join(blobs)
+    for name, why in PYTHON_RISKY.items():
+        if re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w.-])", py_blob):
+            findings.append(Finding("medium", "python-native", f"{name}: {why}"))
 
 
 def scan(root: Path) -> ScanReport:
@@ -129,24 +185,10 @@ def scan(root: Path) -> ScanReport:
     if "docker" in stack:
         findings.append(Finding("medium", "runtime", "Dockerfile found. PRoot-Distro can be a daemonless fallback."))
 
-    package_json = root / "package.json"
-    if package_json.exists():
-        try:
-            pkg = json.loads(_read(package_json))
-            deps = {}
-            deps.update(pkg.get("dependencies", {}))
-            deps.update(pkg.get("devDependencies", {}))
-            for name, why in NODE_RISKY.items():
-                if name in deps:
-                    findings.append(Finding("medium", "node-native", f"{name}: {why}", "package.json"))
-        except json.JSONDecodeError:
-            findings.append(Finding("low", "parse", "package.json is not valid JSON.", "package.json"))
-
-    req_files = [root / "requirements.txt", root / "pyproject.toml"]
-    py_blob = "\n".join(_read(p).lower() for p in req_files if p.exists())
-    for name, why in PYTHON_RISKY.items():
-        if re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w.-])", py_blob):
-            findings.append(Finding("medium", "python-native", f"{name}: {why}"))
+    if "node" in stack:
+        _scan_node_dependencies(root, findings)
+    if "python" in stack:
+        _scan_python_dependencies(root, findings)
 
     seen = set()
     for path in _iter_text_files(root):
