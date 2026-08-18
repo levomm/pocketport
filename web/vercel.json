@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/scan/:path*", "destination": "/index.html" },
+    { "source": "/target", "destination": "/index.html" }
+  ],
+  "cleanUrls": true
+}

@@ -1,0 +1,489 @@
+{
+  "path": "/tmp/deepseek-harness",
+  "stack": [
+    "node",
+    "python"
+  ],
+  "score": 70,
+  "strategy": "native",
+  "findings": [
+    {
+      "severity": "medium",
+      "kind": "node-native",
+      "detail": "playwright: browser automation",
+      "path": "apps/web/package.json",
+      "scope": "dev"
+    },
+    {
+      "severity": "medium",
+      "kind": "node-native",
+      "detail": "sharp: native image dependency",
+      "path": "packages/attachment/attachment-local/package.json",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "node-native",
+      "detail": "node-pty: PTY native module",
+      "path": "packages/subprocess/subprocess-local/package.json",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "glibc dependency",
+      "path": "pnpm-lock.yaml",
+      "scope": "metadata"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "glibc dependency",
+      "path": ".gitlab-ci.yml",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": "scripts/prepare-ci-bubblewrap.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/prepare-ci-bubblewrap.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "architecture",
+      "detail": "x86-only architecture assumption detected",
+      "path": "scripts/prepare-ci-bubblewrap.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/install-lefthook.mjs",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/check-macos-deployment-target.py",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "glibc dependency",
+      "path": "scripts/ci-workflow.spec.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/smoke-python-runtime.py",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/check-expected-filenames.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/install-lefthook.spec.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/migrate-packed-session-fixtures.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/build-python-release.py",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/wine-windows-gates.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "scripts/check-vendor-manifest.sh",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "vendor/cordis/bin.js",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "examples/jsonrpc-agent/minimal.py",
+      "scope": "dev"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "apps/cli/src/bin.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/verify-packed-install.mjs",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/publish-release.mjs",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/commit-release.mjs",
+      "scope": "build"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": "native/landlock-run/scripts/build.ts",
+      "scope": "build"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "glibc dependency",
+      "path": "native/landlock-run/scripts/build.ts",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/verify-release.mjs",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/verify-entry-lib.mjs",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/repo.mjs",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/github-matrix.mjs",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/assemble-prebuilds.mjs",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/pack-release.mjs",
+      "scope": "build"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/verify-launcher-binary.mjs",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "native/landlock-run/scripts/bump-release.mjs",
+      "scope": "build"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": ".github/workflows/ci.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "glibc dependency",
+      "path": ".github/workflows/ci.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": ".github/workflows/ci.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "glibc dependency",
+      "path": ".github/workflows/build-exe-for-python-sdk.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": ".github/workflows/sandbox.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": ".github/workflows/sandbox.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": ".github/workflows/e2e.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": ".github/workflows/e2e.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": ".github/workflows/landlock-run-release.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": ".github/workflows/landlock-run-release.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "medium",
+      "kind": "linux-assumption",
+      "detail": "Debian/Ubuntu package manager",
+      "path": ".github/workflows/landlock-run.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "sudo is normally unavailable/unneeded in Termux",
+      "path": ".github/workflows/landlock-run.yml",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": ".github/issue-management/policy.mjs",
+      "scope": "ci"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": ".agents/skills/record-browser-gif/scripts/encode_gif.py",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "packages/examples/jsonrpc-demo/src/bin.ts",
+      "scope": "dev"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "packages/examples/jsonrpc-demo/src/packaged-bin.ts",
+      "scope": "dev"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "packages/examples/acp-demo/src/bin.ts",
+      "scope": "dev"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded bash path",
+      "path": "packages/e2b/subprocess-e2b/src/terminal.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded bash path",
+      "path": "packages/e2b/e2b/src/index.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded /usr path",
+      "path": "packages/test-support/llm-mock-server/src/bin.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "hard-coded bash path",
+      "path": "packages/terminal/terminal-bash/src/config.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "medium",
+      "kind": "architecture",
+      "detail": "x86-only architecture assumption detected",
+      "path": "packages/sandbox/sandbox-windows-acl/src/win32-abi.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "desktop opener; use termux-open where appropriate",
+      "path": "packages/host/apiproxy/src/native-path-opener.ts",
+      "scope": "runtime"
+    },
+    {
+      "severity": "low",
+      "kind": "patchable",
+      "detail": "desktop opener; use termux-open where appropriate",
+      "path": "packages/host/apiproxy/src/api/host.ts",
+      "scope": "runtime"
+    }
+  ],
+  "components": [
+    {
+      "name": "cli",
+      "role": "client",
+      "path": "apps/cli",
+      "stack": [
+        "node"
+      ],
+      "score": 99,
+      "strategy": "native"
+    },
+    {
+      "name": "web",
+      "role": "client",
+      "path": "apps/web",
+      "stack": [
+        "node"
+      ],
+      "score": 99,
+      "strategy": "native"
+    },
+    {
+      "name": "api",
+      "role": "service",
+      "path": "packages/api",
+      "stack": [
+        "node"
+      ],
+      "score": 100,
+      "strategy": "native"
+    },
+    {
+      "name": "client",
+      "role": "client",
+      "path": "packages/client",
+      "stack": [
+        "node"
+      ],
+      "score": 100,
+      "strategy": "native"
+    },
+    {
+      "name": "web",
+      "role": "client",
+      "path": "packages/web",
+      "stack": [
+        "node"
+      ],
+      "score": 100,
+      "strategy": "native"
+    },
+    {
+      "name": "web",
+      "role": "client",
+      "path": "packages/client/web",
+      "stack": [
+        "node"
+      ],
+      "score": 100,
+      "strategy": "native"
+    },
+    {
+      "name": "web",
+      "role": "client",
+      "path": "packages/web/web",
+      "stack": [
+        "node"
+      ],
+      "score": 100,
+      "strategy": "native"
+    }
+  ]
+}
