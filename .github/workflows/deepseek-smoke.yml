@@ -1,0 +1,55 @@
+name: deepseek-harness-smoke
+
+on:
+  push:
+    branches: ["experiment/deepseek-harness"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  pocketport-deepseek:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PocketPort
+        run: python -m pip install -e .
+
+      - name: Clone DeepSeek Harness
+        run: git clone --depth 1 https://github.com/deepseek-ai/deepseek-harness.git /tmp/deepseek-harness
+
+      - name: Scan
+        run: |
+          mkdir -p smoke-results
+          pocketport scan /tmp/deepseek-harness | tee smoke-results/scan.txt
+          pocketport scan /tmp/deepseek-harness --json > smoke-results/scan.json
+
+      - name: Dry-run patches
+        run: pocketport patch /tmp/deepseek-harness --dry-run -v | tee smoke-results/patch.txt
+
+      - name: Generate Termux installer
+        run: |
+          pocketport generate /tmp/deepseek-harness | tee smoke-results/generate.txt
+          cp /tmp/deepseek-harness/termux-install.sh smoke-results/termux-install.sh
+          cp /tmp/deepseek-harness/.pocketport/report.json smoke-results/generated-report.json
+          echo "--- generated installer ---"
+          cat smoke-results/termux-install.sh
+
+      - name: Sanity checks
+        run: |
+          test -s smoke-results/scan.json
+          test -s smoke-results/termux-install.sh
+          grep -q '^#!/data/data/com.termux/files/usr/bin/bash' smoke-results/termux-install.sh
+          grep -q 'pnpm install --frozen-lockfile' smoke-results/termux-install.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deepseek-harness-smoke
+          path: smoke-results/

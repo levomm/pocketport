@@ -28,6 +28,15 @@ pocketport doctor
 
 Shows Termux detection, CPU architecture and the installed build/runtime toolchain.
 
+On Termux it also performs runtime capability probes for:
+
+- native hard-link publication
+- Node `COPYFILE_EXCL` no-clobber copying
+- the PocketPort Node atomic-publish compatibility shim
+- sandbox/confinement status, which remains target-project specific on Android
+
+This matters because a dependency can install successfully and still fail later on a filesystem or kernel assumption. Apparently software enjoys saving the interesting failure for after installation.
+
 ### Scan a repo
 
 ```bash
@@ -93,6 +102,16 @@ This performs:
 3. rescan
 4. generate `termux-install.sh`
 
+### Run with Termux runtime compatibility
+
+```bash
+pocketport run -- <command> [args...]
+```
+
+On Termux, PocketPort can inject narrowly scoped runtime compatibility shims without modifying the upstream package. The current Node atomic-publish shim first attempts the application's original hard link and only falls back on recognized atomic temp-file patterns when Android returns `EACCES` or `EPERM`.
+
+The fallback uses exclusive no-clobber copying rather than silently overwriting an existing target. Ordinary hard-link calls are left untouched.
+
 ### Pick the correct GitHub release binary
 
 ```bash
@@ -125,6 +144,16 @@ Generated files:
 termux-install.sh
 ```
 
+## Validated experiment: DeepSeek Harness
+
+PocketPort has been tested end-to-end against `deepseek-ai/deepseek-harness` on Android 16 / aarch64 Termux.
+
+The validation covered npm installation, Web UI startup, a real model/agent turn, shell execution, session persistence, and the Harness native filesystem `write` + `read` tools. The tested workflow runs directly in Termux with a PocketPort runtime shim and does not require PRoot.
+
+The remaining limitation is sandbox confinement: the Harness `workspace-write` backend was not usable on the tested Android host, so a safer Termux-specific approval/confinement fallback is still needed.
+
+See [`experiments/deepseek-harness.md`](experiments/deepseek-harness.md) for the full validation and failure analysis.
+
 ## Why PRoot is part of the design
 
 Termux software uses Android's bionic libc rather than desktop Linux glibc. Some projects simply cannot be made native with a few path substitutions.
@@ -152,12 +181,21 @@ PocketPort therefore treats PRoot as a fallback, not as a lie that every Linux p
 - conservative patch safety rules and regression coverage
 - GitHub Actions pytest gate on Python 3.10 and 3.12
 
+### Experimental runtime work
+
+- `pocketport run -- <command>` compatibility environment
+- Node atomic-publish hard-link fallback for Android/Termux
+- runtime capability probes in `pocketport doctor`
+- DeepSeek Harness end-to-end Android validation
+
 ### 0.3 next
 
-- `pocketport run <repo-url>`
+- repo-aware `pocketport run <repo-url>` flow
 - isolated test install
 - failure-log classification
 - retry with learned recipes
+- runtime-aware scanner scoring
+- safer Android approval/confinement fallback
 - optional LLM-assisted patch proposal
 
 ### Later
