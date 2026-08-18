@@ -16,6 +16,13 @@ IGNORED_DIRS = {
     "tests", "test", "docs", ".pocketport",
 }
 
+CI_DIRS = {".github", ".circleci", ".gitlab"}
+DEV_DIRS = {"examples", "example", "benchmarks", "benchmark", "fixtures", "fixture"}
+LOCKFILE_NAMES = {
+    "pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb",
+    "Cargo.lock", "poetry.lock", "uv.lock",
+}
+
 HARD_BLOCKERS = {
     "nvidia/cuda": "CUDA base image",
     "nvidia-smi": "NVIDIA GPU tooling",
@@ -68,6 +75,7 @@ class Finding:
     kind: str
     detail: str
     path: str | None = None
+    scope: str = "runtime"
 
 
 @dataclass
@@ -114,6 +122,29 @@ def _read(path: Path) -> str:
         return ""
 
 
+def _scope_for_path(rel: str) -> str:
+    path = Path(rel)
+    parts = set(path.parts)
+    name = path.name
+    lowered = name.lower()
+
+    if parts & CI_DIRS:
+        return "ci"
+    if name in LOCKFILE_NAMES:
+        return "metadata"
+    if parts & DEV_DIRS:
+        return "dev"
+    if any(token in lowered for token in ("build", "release", "publish", "packaging")):
+        return "build"
+    return "runtime"
+
+
+def _combine_scope(path_scope: str, dependency_scope: str) -> str:
+    if path_scope != "runtime":
+        return path_scope
+    return dependency_scope
+
+
 def _detect_stack(root: Path) -> list[str]:
     marker_map = {
         "package.json": "node",
@@ -136,43 +167,116 @@ def _detect_stack(root: Path) -> list[str]:
 
 
 def _scan_node_dependencies(root: Path, findings: list[Finding]) -> None:
+    dependency_scopes = {
+        "dependencies": "runtime",
+        "peerDependencies": "runtime",
+        "optionalDependencies": "optional",
+        "devDependencies": "dev",
+    }
+    scope_priority = {"runtime": 3, "optional": 2, "dev": 1}
+
     for package_json in _iter_repo_files(root):
         if package_json.name != "package.json":
             continue
         try:
             pkg = json.loads(_read(package_json))
         except json.JSONDecodeError:
-            findings.append(
-                Finding(
-                    "low",
-                    "parse",
-                    "package.json is not valid JSON.",
-                    str(package_json.relative_to(root)),
-                )
-            )
+            rel = str(package_json.relative_to(root))
+            findings.append(Finding(
+                "low", "parse", "package.json is not valid JSON.", rel, _scope_for_path(rel)
+            ))
             continue
 
-        deps = {}
-        for key in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
-            value = pkg.get(key, {})
-            if isinstance(value, dict):
-                deps.update(value)
-
         rel = str(package_json.relative_to(root))
-        for name, why in NODE_RISKY.items():
-            if name in deps:
-                findings.append(Finding("medium", "node-native", f"{name}: {why}", rel))
+        path_scope = _scope_for_path(rel)
+        detected: dict[str, str] = {}
+        for key, dependency_scope in dependency_scopes.items():
+            value = pkg.get(key, {})
+            if not isinstance(value, dict):
+                continue
+            for name in NODE_RISKY:
+                if name not in value:
+                    continue
+                current = detected.get(name)
+                if current is None or scope_priority[dependency_scope] > scope_priority[current]:
+                    detected[name] = dependency_scope
+
+        for name, dependency_scope in detected.items():
+            why = NODE_RISKY[name]
+            findings.append(Finding(
+                "medium",
+                "node-native",
+                f"{name}: {why}",
+                rel,
+                _combine_scope(path_scope, dependency_scope),
+            ))
 
 
 def _scan_python_dependencies(root: Path, findings: list[Finding]) -> None:
-    blobs: list[str] = []
     for path in _iter_repo_files(root):
-        if path.name in {"requirements.txt", "pyproject.toml"}:
-            blobs.append(_read(path).lower())
-    py_blob = "\n".join(blobs)
-    for name, why in PYTHON_RISKY.items():
-        if re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w.-])", py_blob):
-            findings.append(Finding("medium", "python-native", f"{name}: {why}"))
+        if path.name not in {"requirements.txt", "pyproject.toml"}:
+            continue
+        blob = _read(path).lower()
+        rel = str(path.relative_to(root))
+        scope = _scope_for_path(rel)
+        for name, why in PYTHON_RISKY.items():
+            if re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w.-])", blob):
+                findings.append(Finding("medium", "python-native", f"{name}: {why}", rel, scope))
+
+
+def _finding_penalty(finding: Finding) -> int:
+    base = {"high": 25, "medium": 8, "low": 2}.get(finding.severity, 0)
+
+    scope_factor = {
+        "runtime": 1.0,
+        "optional": 0.45,
+        "build": 0.35,
+        "dev": 0.2,
+        "ci": 0.0,
+        "metadata": 0.0,
+    }.get(finding.scope, 1.0)
+    penalty = round(base * scope_factor)
+
+    # Native dependencies are compatibility risks until exercised, not proof
+    # that the runtime is broken. DeepSeek Harness is the first real-world case
+    # that demonstrated why treating every native package as an 8-point runtime
+    # failure is too pessimistic.
+    if finding.kind in {"node-native", "python-native"}:
+        penalty = min(penalty, 3 if finding.scope == "runtime" else 1)
+    if finding.kind == "patchable":
+        penalty = min(penalty, 1)
+    return penalty
+
+
+def _score(findings: list[Finding]) -> int:
+    # The same assumption can appear in runtime source, CI and lockfiles. Count
+    # the strongest occurrence once instead of charging the project repeatedly.
+    penalties: dict[tuple[str, str], int] = {}
+    for finding in findings:
+        key = (finding.kind, finding.detail)
+        penalties[key] = max(penalties.get(key, 0), _finding_penalty(finding))
+    return max(0, min(100, 100 - sum(penalties.values())))
+
+
+def _strategy(findings: list[Finding], stack: list[str]) -> str:
+    runtime_high = {
+        (f.kind, f.detail)
+        for f in findings
+        if f.scope == "runtime" and f.severity == "high"
+    }
+    runtime_adaptations = {
+        (f.kind, f.detail)
+        for f in findings
+        if f.scope == "runtime"
+        and f.kind in {"runtime", "linux-assumption", "architecture"}
+        and f.severity in {"high", "medium"}
+    }
+
+    if len(runtime_high) >= 2:
+        return "proot"
+    if len(runtime_high) == 1 or len(runtime_adaptations) >= 3:
+        return "hybrid"
+    return "native"
 
 
 def scan(root: Path) -> ScanReport:
@@ -181,9 +285,13 @@ def scan(root: Path) -> ScanReport:
     stack = _detect_stack(root)
 
     if "docker-compose" in stack:
-        findings.append(Finding("high", "runtime", "Docker Compose requires adaptation; no normal Docker daemon in stock Termux."))
+        findings.append(Finding(
+            "high", "runtime", "Docker Compose requires adaptation; no normal Docker daemon in stock Termux."
+        ))
     if "docker" in stack:
-        findings.append(Finding("medium", "runtime", "Dockerfile found. PRoot-Distro can be a daemonless fallback."))
+        findings.append(Finding(
+            "medium", "runtime", "Dockerfile found. PRoot-Distro can be a daemonless fallback.", scope="build"
+        ))
 
     if "node" in stack:
         _scan_node_dependencies(root, findings)
@@ -195,19 +303,20 @@ def scan(root: Path) -> ScanReport:
         text = _read(path)
         lower = text.lower()
         rel = str(path.relative_to(root))
+        scope = _scope_for_path(rel)
 
         for needle, detail in HARD_BLOCKERS.items():
             if needle.lower() in lower:
                 key = ("hard", needle, rel)
                 if key not in seen:
-                    findings.append(Finding("high", "blocker", detail, rel))
+                    findings.append(Finding("high", "blocker", detail, rel, scope))
                     seen.add(key)
 
         for needle, detail in PROOT_SIGNALS.items():
             if needle.lower() in lower:
                 key = ("proot", needle, rel)
                 if key not in seen:
-                    findings.append(Finding("medium", "linux-assumption", detail, rel))
+                    findings.append(Finding("medium", "linux-assumption", detail, rel, scope))
                     seen.add(key)
 
         patchable_lower = lower.replace("/data/data/com.termux/files/usr/bin/bash", "")
@@ -215,7 +324,7 @@ def scan(root: Path) -> ScanReport:
             if needle.lower() in patchable_lower:
                 key = ("patch", needle, rel)
                 if key not in seen:
-                    findings.append(Finding("low", "patchable", detail, rel))
+                    findings.append(Finding("low", "patchable", detail, rel, scope))
                     seen.add(key)
 
         x86 = any(token in lower for token in ("x86_64", "amd64"))
@@ -223,22 +332,13 @@ def scan(root: Path) -> ScanReport:
         if x86 and not arm:
             key = ("arch", rel)
             if key not in seen:
-                findings.append(Finding("medium", "architecture", "x86-only architecture assumption detected", rel))
+                findings.append(Finding(
+                    "medium", "architecture", "x86-only architecture assumption detected", rel, scope
+                ))
                 seen.add(key)
 
-    unique_issues = {(f.severity, f.kind, f.detail) for f in findings}
-    high = sum(severity == "high" for severity, _, _ in unique_issues)
-    medium = sum(severity == "medium" for severity, _, _ in unique_issues)
-    low = sum(severity == "low" for severity, _, _ in unique_issues)
-
-    score = max(0, min(100, 100 - high * 25 - medium * 8 - low * 2))
-
-    if high >= 2 or ("docker-compose" in stack and medium >= 2):
-        strategy = "proot"
-    elif high == 1 or medium >= 3:
-        strategy = "hybrid"
-    else:
-        strategy = "native"
+    score = _score(findings)
+    strategy = _strategy(findings, stack)
 
     return ScanReport(
         path=str(root),
