@@ -17,6 +17,23 @@ def test_native_hardlink_permission_denial_is_reported(tmp_path: Path, monkeypat
     assert "Permission denied" in result.detail
 
 
+def test_native_hardlink_falls_back_to_ln_when_os_link_missing(tmp_path: Path, monkeypatch):
+    monkeypatch.delattr(doctor.os, "link", raising=False)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name, path=None: "/usr/bin/ln" if name == "ln" else None)
+
+    class Result:
+        returncode = 1
+        stderr = "ln: failed to create hard link: Permission denied"
+        stdout = ""
+
+    monkeypatch.setattr(doctor.subprocess, "run", lambda *args, **kwargs: Result())
+    result = doctor._probe_native_hardlink(tmp_path)
+
+    assert result.name == "native hardlink"
+    assert result.status == "denied"
+    assert "Permission denied" in result.detail
+
+
 def test_non_termux_shim_probe_is_not_needed(tmp_path: Path):
     env = dict(os.environ)
     env["PREFIX"] = "/usr"
