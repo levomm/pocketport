@@ -30,15 +30,16 @@ and read the same content back through the native Harness filesystem tools.
 Android: 16
 Architecture: aarch64
 Kernel: Linux 6.1.157-android14-11
+Python: 3.14.6
 Node: v22.22.0
 Workspace: /data/data/com.termux/files/home/dsh-termux-test
 ```
 
 The shell validation also successfully returned `uname -a`, `node --version`, and `pwd` from an agent turn.
 
-## Initial PocketPort scan
+## PocketPort scan: before and after runtime-aware scoring
 
-The upstream repository initially scored:
+The original static scanner reported:
 
 ```text
 PocketPort score: 44/100
@@ -46,9 +47,30 @@ Strategy: hybrid
 Stack: node, python
 ```
 
-The scan correctly found desktop-oriented assumptions, including native Node packages, glibc/x86 references, distro package-manager assumptions and CI/build paths.
+That scan correctly found desktop-oriented assumptions, but it treated runtime dependencies, lockfile metadata, CI workflows and build-only scripts too similarly.
 
-The runtime result shows that the current score is too pessimistic for end-user execution. Several findings are development-, CI- or build-only and should not carry the same weight as a true runtime blocker. This experiment is therefore also a test case for future runtime-aware scoring.
+After this experiment fed real Android evidence back into the scanner, findings gained a `scope` such as `runtime`, `optional`, `build`, `dev`, `ci` or `metadata`. CI and lockfile-only assumptions remain visible but no longer reduce runtime compatibility confidence, and native dependencies are treated as risks to validate rather than proof of failure.
+
+The same upstream DeepSeek Harness revision now reports in CI:
+
+```text
+PocketPort score: 70/100
+Strategy: native
+Stack: node, python
+```
+
+Examples from the new report:
+
+```text
+MEDIUM [dev]      node-native: playwright
+MEDIUM [runtime]  node-native: sharp
+MEDIUM [runtime]  node-native: node-pty
+MEDIUM [metadata] linux-assumption: glibc dependency [pnpm-lock.yaml]
+MEDIUM [ci]       linux-assumption: Debian/Ubuntu package manager [.github/workflows/...]
+MEDIUM [build]    linux-assumption: glibc dependency [native/landlock-run/scripts/build.ts]
+```
+
+The score intentionally remains below 100 because untested native runtime dependencies still represent compatibility risk. The important correction is that those risks no longer automatically force a `hybrid` strategy after the actual runtime has demonstrated that native execution works.
 
 ## Runtime blocker 1: hard links in session persistence
 
@@ -80,14 +102,18 @@ PocketPort was then extended to recognize this second staging pattern while keep
 
 ## Runtime capability doctor
 
-The experiment now feeds the discovered host assumptions back into `pocketport doctor`. On Termux the doctor probes:
+The experiment feeds the discovered host assumptions back into `pocketport doctor`. The probe was executed on the real Android host and returned:
 
-- whether native hard-link publication works or is denied
-- whether Node `COPYFILE_EXCL` is available with no-clobber behavior
-- whether the PocketPort Node atomic-publish compatibility path succeeds
-- sandbox/confinement as a target-project-specific capability rather than pretending Android is just desktop Linux with a smaller screen
+```text
+native hardlink        denied - Permission denied
+Node exclusive copy    ok - COPYFILE_EXCL preserves no-clobber behavior
+PocketPort Node shim   ok - atomic publish works through pocketport run compatibility
+sandbox confinement    project-specific
+```
 
-This turns the manual `ln` and Node copy checks used during the investigation into reusable diagnostics for the next port.
+One additional Android-specific issue was found while validating the doctor itself: this Termux Python 3.14 build does not expose `os.link`. PocketPort now detects that and falls back to probing the host through the POSIX `ln` utility rather than crashing or mistaking the missing Python wrapper for a filesystem result.
+
+This turns the manual hard-link and Node copy checks used during the investigation into reusable diagnostics for the next port.
 
 ## Sandbox limitation
 
@@ -109,14 +135,14 @@ For this repository, PRoot was not required for the tested user workflow. The pr
 native + runtime compatibility shim
 ```
 
-rather than the original static-scan `hybrid` result.
+The runtime-aware scanner now also selects `native`, matching the real Android result instead of the original `hybrid` prediction.
 
-This is the first PocketPort case where scanner findings, real Android execution, runtime failure classification and a reusable compatibility shim were exercised together.
+This is the first PocketPort case where scanner findings, real Android execution, runtime failure classification, reusable host diagnostics and a runtime compatibility shim were exercised together.
 
 ## Remaining work
 
 - design a safer Termux approval/confinement fallback
-- distinguish runtime blockers from CI/build/dev-only findings in scanner scoring
+- continue improving scope classification without hiding genuine runtime blockers
 - turn validated compatibility results into reusable per-project recipes or registry entries
 
 The experiment remains isolated from `main` until the 0.2.1 hotfix is merged.
