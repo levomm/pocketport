@@ -26,11 +26,14 @@ def test_non_termux_env_is_unchanged(tmp_path: Path):
     assert not (tmp_path / ".pocketport").exists()
 
 
-def test_shim_only_falls_back_for_atomic_temp_files(tmp_path: Path):
+def test_shim_only_falls_back_for_atomic_publish_shapes(tmp_path: Path):
     shim = ensure_node_atomic_publish_shim(tmp_path).read_text("utf-8")
 
     assert "code === 'EACCES' || code === 'EPERM'" in shim
     assert "sourceName.startsWith(`${targetName}.`)" in shim
     assert "sourceName.endsWith('.tmp')" in shim
+    assert "sourceName === `${targetName}.tmp`" in shim
+    assert "stagingDirName.startsWith(`.${targetName}.`)" in shim
+    assert "stagingDirName.endsWith('.tmpdir')" in shim
     assert "COPYFILE_EXCL" in shim
     assert "syncBuiltinESMExports()" in shim
