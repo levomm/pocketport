@@ -17,7 +17,6 @@ def test_rust_cli_low_build_scripts_do_not_flip_runtime_verdict(tmp_path: Path) 
     write(tmp_path / "Cargo.toml", "[package]\nname='hyperfine-ish'\nversion='0.1.0'\n")
     write(tmp_path / "src/main.rs", "fn main() {}\n")
     write(tmp_path / "scripts/release.py", "#!/usr/bin/python3\n")
-
     report, artifact = semantic_scan(tmp_path)
     assert artifact.type == "cli"
     assert report.strategy == "native"
@@ -29,7 +28,6 @@ def test_python_cli_ignores_packaging_docker_as_primary_stack(tmp_path: Path) ->
     write(tmp_path / "pyproject.toml", "[project]\nname='httpie-ish'\nversion='1'\n[project.scripts]\nhttp='pkg.cli:main'\n")
     write(tmp_path / "extras/packaging/Dockerfile", "FROM debian:stable\nRUN apt-get update\n")
     write(tmp_path / "extras/packaging/docker-compose.yml", "services: {}\n")
-
     report, artifact = semantic_scan(tmp_path)
     assert artifact.type == "cli"
     assert report.stack == ["python"]
@@ -39,7 +37,6 @@ def test_python_cli_ignores_packaging_docker_as_primary_stack(tmp_path: Path) ->
 def test_python_package_without_entrypoint_is_library(tmp_path: Path) -> None:
     write(tmp_path / "pyproject.toml", "[project]\nname='python-fire-ish'\nversion='1'\n")
     write(tmp_path / "src/pkg/__init__.py", "")
-
     report, artifact = semantic_scan(tmp_path)
     plan = build_execution_plan(report, tmp_path)
     assert artifact.type == "library"
@@ -53,7 +50,6 @@ def test_bandwhich_style_privileged_capture_is_not_100_native(tmp_path: Path) ->
     write(tmp_path / "Cargo.toml", "[package]\nname='bandwhich-ish'\nversion='1'\n")
     write(tmp_path / "src/main.rs", "fn main() {}\n")
     write(tmp_path / "README.md", "This tool does packet capture and packet sniffing. sudo setcap cap_net_raw,cap_net_admin+ep ./tool\n")
-
     report, artifact = semantic_scan(tmp_path)
     assert artifact.type == "cli"
     assert report.score < 100
@@ -66,7 +62,6 @@ def test_devcontainer_is_never_a_runnable_component(tmp_path: Path) -> None:
     write(tmp_path / "package.json", json.dumps({"name": "electron-ish", "devDependencies": {"electron": "1"}}))
     write(tmp_path / ".devcontainer/docker-compose.yml", "services: {}\n")
     write(tmp_path / ".devcontainer/Dockerfile", "FROM ubuntu\n")
-
     report, artifact = semantic_scan(tmp_path)
     components = assess_components(tmp_path, report.findings)
     plan = build_execution_plan(report, tmp_path)
@@ -82,7 +77,6 @@ def test_agent_skill_gets_agent_install_plan_not_process_run(tmp_path: Path) -> 
     write(tmp_path / "skills/scroll-world/SKILL.md", "# scroll-world\n")
     write(tmp_path / "README.md", "npx skills add oso95/scroll-world -a codex\nInvoke it with $scroll-world.\n")
     write(tmp_path / "skills/scroll-world/references/knockout.py", "#!/usr/bin/python3\n")
-
     report, artifact = semantic_scan(tmp_path)
     plan = build_execution_plan(report, tmp_path)
     assert artifact.type == "agent-skill"
@@ -96,8 +90,20 @@ def test_root_compose_service_remains_fallback_candidate(tmp_path: Path) -> None
     write(tmp_path / "package.json", json.dumps({"name": "uptime-ish", "scripts": {"start": "node server/server.js"}}))
     write(tmp_path / "docker-compose.yml", "services:\n  app:\n    image: example\n")
     write(tmp_path / "server/server.js", "console.log('server')\n")
-
     report, artifact = semantic_scan(tmp_path)
     assert artifact.type == "service"
     assert "docker-compose" in report.stack
     assert report.strategy in {"hybrid", "proot"}
+
+
+def test_legacy_ci_file_does_not_become_runtime_architecture_blocker(tmp_path: Path) -> None:
+    write(tmp_path / "go.mod", "module example.com/k9s-ish\n")
+    write(tmp_path / "cmd/k9s/main.go", "package main\nfunc main() {}\n")
+    write(tmp_path / ".travis.yml", "arch: amd64\n")
+    write(tmp_path / "internal/render/testdata/job.json", '{"platform":"x86_64"}\n')
+    report, artifact = semantic_scan(tmp_path)
+    assert artifact.type == "cli"
+    architecture = [f for f in report.findings if f.kind == "architecture"]
+    assert architecture
+    assert all(f.scope in {"ci", "dev"} for f in architecture)
+    assert report.strategy == "native"
