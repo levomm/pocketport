@@ -8,6 +8,7 @@ import shutil
 import tempfile
 
 from .components import assess_components
+from .entrypoints import enrich_workspace_entrypoint
 from .execution import ExecutionPlan, build_execution_plan
 from .live_scan import _download_archive, _extract_archive, normalize_public_github_url
 from .semantics import semantic_scan
@@ -90,7 +91,7 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
             pass
 
         report, artifact = semantic_scan(root)
-        plan = build_execution_plan(report, root)
+        plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
         components = assess_components(root, report.findings)
 
         metadata = root / ".pocketport"
