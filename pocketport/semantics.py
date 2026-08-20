@@ -15,6 +15,7 @@ SUPPORT_DIRS = {
     "benchmarks", "benchmark", "packaging", "scripts", "script", "tools",
     "extra", "extras", ".pocketport",
 }
+CI_FILES = {".travis.yml", ".travis.yaml", "appveyor.yml", "appveyor.yaml", "azure-pipelines.yml"}
 
 ROOT_STACK_MARKERS = {
     "package.json": "node", "pyproject.toml": "python", "requirements.txt": "python",
@@ -147,8 +148,9 @@ def _root_has_dockerfile(root: Path) -> bool:
 def _rescope(path: str | None, current: str) -> str:
     if not path:
         return current
-    parts = [part.lower() for part in Path(path).parts]
-    if any(part in {".github", ".circleci", ".gitlab"} for part in parts):
+    parsed = Path(path)
+    parts = [part.lower() for part in parsed.parts]
+    if parsed.name.lower() in CI_FILES or any(part in {".github", ".circleci", ".gitlab"} for part in parts):
         return "ci"
     if any(part in {"tests", "test", "testdata", "fixtures", "fixture", "examples", "example", "benchmarks", "benchmark"} for part in parts):
         return "dev"
@@ -171,17 +173,11 @@ def classify_repository(root: Path, stack: list[str] | None = None) -> ArtifactP
                 surface = skill_files[0].parent.relative_to(root).as_posix() or "."
             except ValueError:
                 pass
-        return ArtifactProfile(
-            "agent-skill", False, surface, "high", [],
-            ["Install into a SKILL.md-compatible agent; this repository is not a standalone process."],
-        )
+        return ArtifactProfile("agent-skill", False, surface, "high", [], ["Install into a SKILL.md-compatible agent; this repository is not a standalone process."])
 
     intro = readme[:3000]
     if _node_uses_electron(package) or ("electron" in intro and "desktop" in intro):
-        return ArtifactProfile(
-            "desktop-app", True, ".", "high", ["graphical display environment"],
-            ["Desktop GUI execution is not a normal stock-Termux target."],
-        )
+        return ArtifactProfile("desktop-app", True, ".", "high", ["graphical display environment"], ["Desktop GUI execution is not a normal stock-Termux target."])
 
     if "python" in stack and _python_has_scripts(root):
         return ArtifactProfile("cli", True, ".", "high", [], [])
@@ -218,7 +214,6 @@ def classify_repository(root: Path, stack: list[str] | None = None) -> ArtifactP
         return ArtifactProfile("library", False, ".", "medium", [], ["Node package without a proven bin/start entrypoint.", no_launch_note])
     if "docker-compose" in stack:
         return ArtifactProfile("container-stack", True, ".", "high", ["Linux container/service environment"], [])
-
     return ArtifactProfile("application", True, ".", "low", [], ["Repository type could not be proven more specifically."])
 
 
@@ -226,27 +221,15 @@ def _capability_findings(root: Path, profile: ArtifactProfile) -> tuple[list[Fin
     findings: list[Finding] = []
     requirements = list(profile.requirements)
     readme = _read(root / "README.md").lower()
-
     privilege_tokens = ("cap_net_raw", "cap_net_admin", "cap_sys_ptrace", "setcap ")
     packet_tokens = ("packet sniff", "packet capture", "sniffs a given network interface", "raw socket")
     if any(token in readme for token in privilege_tokens) and any(token in readme for token in packet_tokens):
-        findings.append(Finding(
-            "high", "capability",
-            "Requires elevated packet-capture/network capabilities that stock Termux normally cannot grant.",
-            "README.md", "runtime",
-        ))
+        findings.append(Finding("high", "capability", "Requires elevated packet-capture/network capabilities that stock Termux normally cannot grant.", "README.md", "runtime"))
         requirements.append("elevated packet-capture/network privileges")
-
     if profile.type == "desktop-app":
-        findings.append(Finding(
-            "high", "capability",
-            "Desktop GUI runtime requires a display/session environment outside normal stock Termux.",
-            None, "runtime",
-        ))
-
+        findings.append(Finding("high", "capability", "Desktop GUI runtime requires a display/session environment outside normal stock Termux.", None, "runtime"))
     if "kubeconfig" in readme or "kubernetes cluster" in readme:
         requirements.append("external Kubernetes cluster/configuration")
-
     return findings, list(dict.fromkeys(requirements))
 
 
@@ -254,7 +237,6 @@ def apply_semantics(report: ScanReport, root: Path) -> ArtifactProfile:
     root = root.resolve()
     primary_stack = _primary_stack(root)
     profile = classify_repository(root, primary_stack)
-
     cleaned: list[Finding] = []
     for finding in report.findings:
         scope = _rescope(finding.path, finding.scope)
@@ -272,7 +254,6 @@ def apply_semantics(report: ScanReport, root: Path) -> ArtifactProfile:
     report.strategy = _strategy(cleaned, primary_stack)
     if any(f.kind == "capability" and f.severity == "high" and f.scope == "runtime" for f in cleaned):
         report.strategy = "hybrid" if report.strategy == "native" else report.strategy
-
     return ArtifactProfile(profile.type, profile.runnable, profile.primary_surface, profile.confidence, requirements, profile.notes)
 
 
