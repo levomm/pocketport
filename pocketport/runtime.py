@@ -79,11 +79,26 @@ def ensure_node_atomic_publish_shim(home: Path | None = None) -> Path:
     return shim
 
 
+def _prefer_termux_native_path(env: dict[str, str]) -> None:
+    """Put Termux's own binaries ahead of app-specific Node/tool wrappers.
+
+    Android automation stacks often prepend private Node installations to PATH.
+    Those wrappers can reinterpret Node CLI flags intended for the target project.
+    PocketPort compatibility runs should use the Termux toolchain installed for
+    the workspace while preserving the rest of PATH for project dependencies.
+    """
+    prefix_bin = str(Path(env["PREFIX"]) / "bin")
+    parts = [part for part in env.get("PATH", "").split(os.pathsep) if part and part != prefix_bin]
+    env["PATH"] = os.pathsep.join([prefix_bin, *parts])
+    env["POCKETPORT_TERMUX_NATIVE_PATH"] = "1"
+
+
 def compat_env(env: dict[str, str] | None = None, *, home: Path | None = None) -> dict[str, str]:
     result = dict(os.environ if env is None else env)
     if not is_termux(result):
         return result
 
+    _prefer_termux_native_path(result)
     shim = ensure_node_atomic_publish_shim(home)
     require_opt = f"--require={shim}"
     current = result.get("NODE_OPTIONS", "").strip()
