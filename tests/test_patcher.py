@@ -50,6 +50,96 @@ def test_package_json_scripts_are_patched(tmp_path: Path):
     assert "package.json" in report.files_changed
 
 
+def test_node_import_argument_is_joined_for_termux_wrapper(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "scripts": {"dev": "node --import tsx/esm apps/cli/src/bin.ts web"},
+    }))
+
+    patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["dev"] == "node --import=tsx/esm apps/cli/src/bin.ts web"
+
+
+def test_node_require_argument_is_joined_for_termux_wrapper(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "scripts": {"dev": "node --require tsx/cjs scripts/dev.cjs"},
+    }))
+
+    patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["dev"] == "node --require=tsx/cjs scripts/dev.cjs"
+
+
+def test_tsx_script_launcher_uses_node_import_hook(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"tsx": "^4.0.0"},
+        "scripts": {"build": "tsx scripts/build.ts --profile official"},
+    }))
+
+    patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["build"] == "node --import=tsx/esm scripts/build.ts --profile official"
+
+
+def test_tsdown_uses_tsx_config_loader_when_available(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"tsx": "^4.0.0", "tsdown": "^0.22.0"},
+        "scripts": {
+            "build": "tsc -b tsconfig.host.json && tsdown --env.DSH_BUILD_FACE host"
+        },
+    }))
+
+    patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["build"] == (
+        "tsc -b tsconfig.host.json && tsdown --config-loader tsx --env.DSH_BUILD_FACE host"
+    )
+
+
+def test_tsdown_existing_config_loader_is_preserved(tmp_path: Path):
+    p = tmp_path / "package.json"
+    original = "tsdown --config-loader unrun --env.FACE host"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"tsx": "^4.0.0", "tsdown": "^0.22.0"},
+        "scripts": {"build": original},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["build"] == original
+    assert not report.files_changed
+
+
+def test_tsdown_is_not_rewritten_without_tsx_dependency(tmp_path: Path):
+    p = tmp_path / "package.json"
+    original = "tsdown --env.FACE host"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"tsdown": "^0.22.0"},
+        "scripts": {"build": original},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["build"] == original
+    assert not report.files_changed
+
+
 def test_complex_apt_line_is_not_rewritten(tmp_path: Path):
     script = tmp_path / "x.sh"
     original = "sudo apt-get install foo && echo done\n"

@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 
 from pocketport.execution import ExecutionComponent, ExecutionPlan
-from pocketport.workspace import _repository_has_node_dependency, render_install_script, render_run_script
+from pocketport.workspace import (
+    _clone_public_repository,
+    _repository_has_node_dependency,
+    render_install_script,
+    render_run_script,
+)
 
 
 def _plan() -> ExecutionPlan:
@@ -74,6 +79,35 @@ def test_node_dependency_detection_ignores_node_modules(tmp_path) -> None:
     package.parent.mkdir(parents=True)
     package.write_text(json.dumps({"dependencies": {"sharp": "^0.35.3"}}), "utf-8")
     assert _repository_has_node_dependency(tmp_path, "sharp") is False
+
+
+def test_clone_public_repository_uses_shallow_git_clone(tmp_path, monkeypatch) -> None:
+    calls = []
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    monkeypatch.setattr("pocketport.workspace.shutil.which", lambda name: "/usr/bin/git" if name == "git" else None)
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return Result()
+
+    monkeypatch.setattr("pocketport.workspace.subprocess.run", fake_run)
+    destination = tmp_path / "repo"
+
+    assert _clone_public_repository("https://github.com/example/demo", destination) is True
+    assert calls
+    assert calls[0][0] == [
+        "/usr/bin/git", "clone", "--depth", "1", "--no-tags",
+        "https://github.com/example/demo", str(destination),
+    ]
+
+
+def test_clone_public_repository_falls_back_without_git(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("pocketport.workspace.shutil.which", lambda name: None)
+    assert _clone_public_repository("https://github.com/example/demo", tmp_path / "repo") is False
 
 
 def test_run_script_enters_component_and_runs_through_pocketport() -> None:

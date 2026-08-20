@@ -58,6 +58,9 @@ SAFE_SUDO_COMMANDS = {
     "python", "python3", "rm", "rustc", "sed", "tar", "termux-open", "touch", "unzip",
     "wget", "xdg-open", "yum", "yarn", "zip",
 }
+NODE_DEPENDENCY_SECTIONS = (
+    "dependencies", "devDependencies", "optionalDependencies", "peerDependencies"
+)
 
 
 @dataclass
@@ -242,6 +245,52 @@ def _patch_shell_text(
     return "".join(out), changes, warnings
 
 
+def _package_has_dependency(data: dict, name: str) -> bool:
+    for section in NODE_DEPENDENCY_SECTIONS:
+        dependencies = data.get(section)
+        if isinstance(dependencies, dict) and name in dependencies:
+            return True
+    return False
+
+
+def _patch_node_script(value: str, *, has_tsx: bool) -> str:
+    # Some Android/Termux Node wrappers lose the following argument for options
+    # such as --import/--require. The equals form is accepted by stock Node too.
+    value = re.sub(
+        r"(?<!\S)node\s+--import\s+([^\s;&|]+)",
+        r"node --import=\1",
+        value,
+    )
+    value = re.sub(
+        r"(?<!\S)node\s+--require\s+([^\s;&|]+)",
+        r"node --require=\1",
+        value,
+    )
+
+    if not has_tsx:
+        return value
+
+    # Avoid the tsx executable shim when a script can be launched through
+    # Node's stable ESM import hook directly. Preserve script arguments.
+    value = re.sub(
+        r"(^|(?:&&|\|\||;)\s*)tsx\s+([^\s;&|]+\.tsx?)(?=\s|$)",
+        lambda match: f"{match.group(1)}node --import=tsx/esm {match.group(2)}",
+        value,
+    )
+
+    # tsdown's automatic/native TypeScript config loader uses Node
+    # registerHooks on modern Node versions. That hook path is not reliable in
+    # every Android Node build, while tsdown explicitly supports the tsx loader.
+    def patch_tsdown(match: re.Match[str]) -> str:
+        command = match.group(0)
+        if "--config-loader" in command:
+            return command
+        return command.replace("tsdown", "tsdown --config-loader tsx", 1)
+
+    value = re.sub(r"(?<![\w.-])tsdown(?:[^;&|]*)", patch_tsdown, value)
+    return value
+
+
 def _patch_package_json(path: Path) -> tuple[str | None, list[tuple[str, str, str]], list[str]]:
     try:
         data = json.loads(path.read_text("utf-8"))
@@ -252,12 +301,14 @@ def _patch_package_json(path: Path) -> tuple[str | None, list[tuple[str, str, st
     if not isinstance(scripts, dict):
         return None, [], []
 
+    has_tsx = _package_has_dependency(data, "tsx")
     changed = []
     warnings = []
     for name, value in list(scripts.items()):
         if not isinstance(value, str):
             continue
         original = value
+        value = _patch_node_script(value, has_tsx=has_tsx)
         if not any(x in value for x in SHELL_META):
             value = _remove_sudo_prefix(value)
             value = _replace_command_prefix(value, "xdg-open", "termux-open")
