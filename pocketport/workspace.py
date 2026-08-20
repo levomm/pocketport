@@ -20,6 +20,24 @@ def _relative_cd(path: str) -> str:
     return f"cd {shlex.quote(path)}\n"
 
 
+def _run_command_with_forwarded_args(command: str) -> str:
+    prefix = "pocketport run -- "
+    inner = command[len(prefix):] if command.startswith(prefix) else command
+    try:
+        tokens = shlex.split(inner)
+    except ValueError:
+        tokens = []
+
+    needs_separator = False
+    if len(tokens) >= 2 and tokens[0] in {"npm", "pnpm"}:
+        needs_separator = tokens[1] == "run" or tokens[1] in {"start", "test"}
+    elif len(tokens) >= 2 and tokens[0] == "cargo" and tokens[1] == "run":
+        needs_separator = True
+
+    separator = " --" if needs_separator else ""
+    return f'{command}{separator} "$@"'
+
+
 def render_install_script(plan: ExecutionPlan) -> str:
     install = "\n".join(plan.install)
     install_cd = _relative_cd(plan.install_directory)
@@ -98,12 +116,19 @@ def render_run_script(plan: ExecutionPlan) -> str | None:
     if not plan.run:
         return None
     working_cd = _relative_cd(plan.working_directory)
-    commands = "\n".join(plan.run)
+    setup_commands = "\n".join(plan.run[:-1])
+    final_command = plan.run[-1]
+    forwarded_command = _run_command_with_forwarded_args(final_command)
+    setup_block = f"{setup_commands}\n" if setup_commands else ""
     return f'''#!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cd "$ROOT"
-{working_cd}{commands}
+{working_cd}{setup_block}if [ "$#" -gt 0 ]; then
+  {forwarded_command}
+else
+  {final_command}
+fi
 '''
 
 
