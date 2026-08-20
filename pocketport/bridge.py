@@ -11,7 +11,7 @@ from .release import normalize_arch
 
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 8765
+DEFAULT_PORT = 33343
 ALLOWED_ORIGINS = {
     "https://pocketport.vercel.app",
 }
