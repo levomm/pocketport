@@ -133,7 +133,7 @@
 
   const observer = new MutationObserver(() => { maybeOfferBridge(); });
   const app = document.getElementById('app');
-  if (app) observer.observe(app, { childList: true, subtree: true });
+  if (app) observer.observe(app, { childList: true });
   maybeOfferBridge();
 
   window.PocketPortBridge = { detectLocalBridge, connect };
