@@ -42,8 +42,17 @@ if [ -z "${{PREFIX:-}}" ] || [[ "${{PREFIX}}" != *"com.termux"* ]]; then
   exit 2
 fi
 
+# Prepared installs must use the Android/Termux toolchain even when another
+# private Node/Python toolchain appears earlier in the user's inherited PATH.
+# Native package managers use their runtime platform to select optional binary
+# dependencies such as esbuild, rollup and sharp.
+export PATH="${{PREFIX}}/bin:${{PATH:-}}"
+hash -r
+export POCKETPORT_TERMUX_TOOLCHAIN=1
+
 echo "[PocketPort] local prepared workspace"
 echo "[PocketPort] method={plan.method} status={plan.status}"
+echo "[PocketPort] Termux toolchain preferred for install"
 
 {install_cd}{install}
 

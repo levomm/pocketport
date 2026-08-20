@@ -28,6 +28,15 @@ def test_install_script_installs_but_does_not_launch_project() -> None:
     assert script.index("cat <<'EOF'") < script.index("pocketport run -- npm start")
 
 
+def test_install_script_prefers_termux_toolchain_before_package_manager_runs() -> None:
+    script = render_install_script(_plan())
+    path_export = 'export PATH="${PREFIX}/bin:${PATH:-}"'
+    assert path_export in script
+    assert "hash -r" in script
+    assert "export POCKETPORT_TERMUX_TOOLCHAIN=1" in script
+    assert script.index(path_export) < script.index("npm install")
+
+
 def test_run_script_enters_component_and_runs_through_pocketport() -> None:
     script = render_run_script(_plan())
     assert script is not None
