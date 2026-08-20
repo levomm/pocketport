@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from .live_scan import LiveScanError, scan_public_github
 from .release import normalize_arch
+from .workspace import prepare_public_github
 
 
 DEFAULT_HOST = "127.0.0.1"
@@ -31,12 +32,12 @@ def health_payload() -> dict[str, object]:
     return {
         "ok": True,
         "service": "pocketport-local-bridge",
-        "api": 2,
+        "api": 3,
         "binding": "loopback",
         "version": _package_version(),
         "termux": "com.termux" in prefix,
         "arch": normalize_arch(platform.machine()),
-        "capabilities": ["health", "local-plan"],
+        "capabilities": ["health", "local-plan", "prepare-workspace"],
     }
 
 
@@ -63,7 +64,7 @@ def _local_plan(repository: str) -> dict[str, object]:
     return {
         "ok": True,
         "service": "pocketport-local-bridge",
-        "api": 2,
+        "api": 3,
         "source": "local-device",
         "repository": report.get("repository", repository),
         "device": health_payload(),
@@ -74,8 +75,19 @@ def _local_plan(repository: str) -> dict[str, object]:
     }
 
 
+def _prepare_workspace(repository: str) -> dict[str, object]:
+    result = prepare_public_github(repository)
+    return {
+        "service": "pocketport-local-bridge",
+        "api": 3,
+        "source": "local-device",
+        "device": health_payload(),
+        **result,
+    }
+
+
 class BridgeHandler(BaseHTTPRequestHandler):
-    server_version = "PocketPortBridge/2"
+    server_version = "PocketPortBridge/3"
 
     def log_message(self, format: str, *args: object) -> None:
         return
@@ -135,7 +147,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         return payload
 
     def do_OPTIONS(self) -> None:
-        if self._path() not in {"/health", "/api/health", "/api/plan"}:
+        if self._path() not in {"/health", "/api/health", "/api/plan", "/api/prepare"}:
             self._send_json(404, {"error": "not found", "code": "not_found"})
             return
         if not self._origin_allowed():
@@ -151,9 +163,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._send_json(200, health_payload())
 
     def do_POST(self) -> None:
-        if self._path() != "/api/plan":
+        path = self._path()
+        if path not in {"/api/plan", "/api/prepare"}:
             self._send_json(405, {
-                "error": "only the read-only planning endpoint accepts POST",
+                "error": "only PocketPort planning and workspace preparation endpoints accept POST",
                 "code": "method_not_allowed",
             })
             return
@@ -169,12 +182,14 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            result = _local_plan(repository)
+            result = _local_plan(repository) if path == "/api/plan" else _prepare_workspace(repository)
         except LiveScanError as exc:
             self._send_json(exc.status, {"error": str(exc), "code": exc.code})
             return
         except Exception:
-            self._send_json(500, {"error": "local planning failed unexpectedly", "code": "internal_error"})
+            code = "prepare_failed" if path == "/api/prepare" else "internal_error"
+            message = "workspace preparation failed unexpectedly" if path == "/api/prepare" else "local planning failed unexpectedly"
+            self._send_json(500, {"error": message, "code": code})
             return
 
         self._send_json(200, result)
@@ -195,7 +210,7 @@ def serve(port: int = DEFAULT_PORT) -> None:
     server = create_server(port)
     actual_port = server.server_address[1]
     print(f"[PocketPort] local bridge: http://{DEFAULT_HOST}:{actual_port}")
-    print("[PocketPort] read-only health + planning API enabled; Ctrl+C to stop")
+    print("[PocketPort] local planning + explicit workspace preparation enabled; Ctrl+C to stop")
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:

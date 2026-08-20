@@ -22,6 +22,15 @@ def _url(server, path: str = "/health") -> str:
     return f"http://{DEFAULT_HOST}:{server.server_address[1]}{path}"
 
 
+def _post(server, path: str, payload: dict, *, origin: str = "https://pocketport.vercel.app"):
+    return Request(
+        _url(server, path),
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "Origin": origin},
+        method="POST",
+    )
+
+
 def test_bridge_binds_loopback_and_returns_health() -> None:
     server, thread = _running_server()
     try:
@@ -31,8 +40,8 @@ def test_bridge_binds_loopback_and_returns_health() -> None:
         assert payload["ok"] is True
         assert payload["service"] == "pocketport-local-bridge"
         assert payload["binding"] == "loopback"
-        assert payload["api"] == 2
-        assert payload["capabilities"] == ["health", "local-plan"]
+        assert payload["api"] == 3
+        assert payload["capabilities"] == ["health", "local-plan", "prepare-workspace"]
         assert isinstance(payload["arch"], str)
     finally:
         server.shutdown()
@@ -71,7 +80,7 @@ def test_local_plan_endpoint_returns_core_plan(monkeypatch) -> None:
     expected = {
         "ok": True,
         "service": "pocketport-local-bridge",
-        "api": 2,
+        "api": 3,
         "source": "local-device",
         "repository": "https://github.com/example/project",
         "device": {"arch": "aarch64"},
@@ -84,16 +93,7 @@ def test_local_plan_endpoint_returns_core_plan(monkeypatch) -> None:
 
     server, thread = _running_server()
     try:
-        request = Request(
-            _url(server, "/api/plan"),
-            data=json.dumps({"repository": "https://github.com/example/project"}).encode(),
-            headers={
-                "Content-Type": "application/json",
-                "Origin": "https://pocketport.vercel.app",
-            },
-            method="POST",
-        )
-        with urlopen(request, timeout=2) as response:
+        with urlopen(_post(server, "/api/plan", {"repository": "https://github.com/example/project"}), timeout=2) as response:
             payload = json.load(response)
             assert response.headers["Access-Control-Allow-Origin"] == "https://pocketport.vercel.app"
         assert payload == expected
@@ -103,19 +103,42 @@ def test_local_plan_endpoint_returns_core_plan(monkeypatch) -> None:
         thread.join(timeout=2)
 
 
-def test_local_plan_rejects_untrusted_origin(monkeypatch) -> None:
-    monkeypatch.setattr(bridge, "_local_plan", lambda repository: pytest.fail("planner must not run"))
+def test_prepare_endpoint_materializes_only_after_explicit_post(monkeypatch) -> None:
+    expected = {
+        "ok": True,
+        "service": "pocketport-local-bridge",
+        "api": 3,
+        "source": "local-device",
+        "repository": "https://github.com/example/project",
+        "workspace": "/tmp/.pocketport/workspaces/example-project-123",
+        "repo_root": "/tmp/.pocketport/workspaces/example-project-123/repo",
+        "installer": "/tmp/.pocketport/workspaces/example-project-123/repo/termux-install.sh",
+        "runner": None,
+        "execution_plan": {"status": "installable", "method": "source", "install": ["npm install"], "run": []},
+        "device": {"arch": "aarch64"},
+    }
+    monkeypatch.setattr(bridge, "_prepare_workspace", lambda repository: expected)
+
     server, thread = _running_server()
     try:
-        request = Request(
-            _url(server, "/api/plan"),
-            data=b'{"repository":"https://github.com/example/project"}',
-            headers={"Content-Type": "application/json", "Origin": "https://evil.example"},
-            method="POST",
-        )
-        with pytest.raises(HTTPError) as exc:
-            urlopen(request, timeout=2)
-        assert exc.value.code == 403
+        with urlopen(_post(server, "/api/prepare", {"repository": "https://github.com/example/project"}), timeout=2) as response:
+            payload = json.load(response)
+        assert payload == expected
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_local_post_endpoints_reject_untrusted_origin(monkeypatch) -> None:
+    monkeypatch.setattr(bridge, "_local_plan", lambda repository: pytest.fail("planner must not run"))
+    monkeypatch.setattr(bridge, "_prepare_workspace", lambda repository: pytest.fail("preparer must not run"))
+    server, thread = _running_server()
+    try:
+        for path in ("/api/plan", "/api/prepare"):
+            with pytest.raises(HTTPError) as exc:
+                urlopen(_post(server, path, {"repository": "https://github.com/example/project"}, origin="https://evil.example"), timeout=2)
+            assert exc.value.code == 403
     finally:
         server.shutdown()
         server.server_close()

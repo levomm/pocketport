@@ -2,9 +2,11 @@
   const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:33343/health';
   const TIMEOUT_MS = 2200;
   const PLAN_TIMEOUT_MS = 45000;
+  const PREPARE_TIMEOUT_MS = 60000;
   let bridgeState = { status: 'unknown' };
   let probing = false;
   let planning = false;
+  let preparing = false;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -13,6 +15,10 @@
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
+  }
+
+  function shellQuote(value) {
+    return `'${String(value ?? '').replaceAll("'", `'"'"'`)}'`;
   }
 
   function ensureStyles() {
@@ -31,6 +37,8 @@
       .local-plan-status strong{display:block;color:#e0e8e2;margin-bottom:5px}
       .local-plan-meta{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
       .local-plan-meta span{border:1px solid #233129;border-radius:999px;padding:5px 8px;font-family:var(--mono);font-size:9px;color:#9baa9f}
+      .local-prepare-button{width:100%;margin-top:14px}
+      .local-path{margin-top:10px;padding:10px 12px;border:1px solid #1f2d25;border-radius:8px;background:#080d0a;font-family:var(--mono);font-size:10px;color:#8fa095;overflow-wrap:anywhere}
       @media(max-width:430px){.bridge-card{align-items:flex-start}.bridge-card .bridge-meta{white-space:normal}.bridge-connect{margin-top:1px}}
     `;
     document.head.appendChild(style);
@@ -85,12 +93,21 @@
     }
   }
 
-  function canPlanLocally() {
+  function hasCapability(name) {
     const payload = bridgeState.payload || {};
     return bridgeState.status === 'connected'
-      && Number(payload.api || 0) >= 2
       && Array.isArray(payload.capabilities)
-      && payload.capabilities.includes('local-plan');
+      && payload.capabilities.includes(name);
+  }
+
+  function canPlanLocally() {
+    const payload = bridgeState.payload || {};
+    return Number(payload.api || 0) >= 2 && hasCapability('local-plan');
+  }
+
+  function canPrepareLocally() {
+    const payload = bridgeState.payload || {};
+    return Number(payload.api || 0) >= 3 && hasCapability('prepare-workspace');
   }
 
   function renderBridgeCard() {
@@ -111,9 +128,11 @@
       const payload = bridgeState.payload || {};
       const arch = payload.arch || 'unknown';
       const version = payload.version || 'unknown';
-      const detail = canPlanLocally()
-        ? 'Local Termux bridge is ready to build execution plans.'
-        : 'Local Termux bridge is reachable.';
+      const detail = canPrepareLocally()
+        ? 'Local Termux bridge can plan and prepare PocketPort workspaces.'
+        : canPlanLocally()
+          ? 'Local Termux bridge is ready to build execution plans.'
+          : 'Local Termux bridge is reachable.';
       card.className = 'bridge-card';
       card.innerHTML = `<div><strong><span class="bridge-dot"></span>PocketPort detected on this phone</strong><span>${detail}</span></div><div class="bridge-meta">${arch} · v${version}</div>`;
       const targetLabel = target.querySelector('span:first-child');
@@ -189,11 +208,11 @@
     requestAnimationFrame(() => document.body.classList.add('sheet-open'));
   }
 
-  async function planRepository(repository) {
+  async function postRepository(path, repository, timeoutMs) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PLAN_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(bridgeEndpoint('/api/plan'), {
+      const response = await fetch(bridgeEndpoint(path), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repository }),
@@ -206,14 +225,25 @@
         const message = payload?.error || `Local PocketPort returned HTTP ${response.status}`;
         throw new Error(message);
       }
-      if (!payload?.execution_plan) throw new Error('Local PocketPort returned no execution plan.');
       return payload;
     } catch (error) {
-      if (error && error.name === 'AbortError') throw new Error('Local planning timed out.');
+      if (error && error.name === 'AbortError') throw new Error('Local PocketPort operation timed out.');
       throw error;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async function planRepository(repository) {
+    const payload = await postRepository('/api/plan', repository, PLAN_TIMEOUT_MS);
+    if (!payload?.execution_plan) throw new Error('Local PocketPort returned no execution plan.');
+    return payload;
+  }
+
+  async function prepareRepository(repository) {
+    const payload = await postRepository('/api/prepare', repository, PREPARE_TIMEOUT_MS);
+    if (!payload?.repo_root || !payload?.installer) throw new Error('Local PocketPort did not return a prepared workspace.');
+    return payload;
   }
 
   function renderPlanPayload(payload) {
@@ -225,10 +255,27 @@
     const notes = (plan.notes || []).map(note => `<div class="sheet-note">${escapeHtml(note)}</div>`).join('');
     const device = payload.device || {};
     const meta = `<div class="local-plan-meta"><span>LOCAL DEVICE</span><span>${escapeHtml(device.arch || 'unknown')}</span><span>v${escapeHtml(device.version || 'unknown')}</span><span>${escapeHtml(payload.strategy || 'unknown')}</span></div>`;
+    const prepare = canPrepareLocally()
+      ? '<button class="primary-button local-prepare-button" data-local-prepare type="button"><span>Prepare on this phone</span><span class="button-arrow">↗</span></button><div class="sheet-note">Creates a PocketPort-owned workspace and installer files. It does not execute the installer.</div>'
+      : '';
     openLocalSheet(
       'LOCAL EXECUTION PLAN',
       `${plan.status || 'plan'} · ${plan.method || 'PocketPort'}`,
-      `${meta}<p class="sheet-copy">Generated now by PocketPort Core running in this phone's Termux. The browser did not invent these commands.</p>${commandHtml}${notes}`,
+      `${meta}<p class="sheet-copy">Generated now by PocketPort Core running in this phone's Termux. The browser did not invent these commands.</p>${commandHtml}${notes}${prepare}`,
+    );
+  }
+
+  function renderPreparedPayload(payload) {
+    const repoRoot = payload.repo_root;
+    const installCommand = `cd ${shellQuote(repoRoot)} && ./termux-install.sh`;
+    const runCommand = payload.runner ? `cd ${shellQuote(repoRoot)} && ./termux-run.sh` : null;
+    const runHtml = runCommand
+      ? `<p class="sheet-copy">After a successful install:</p><div class="command-block"><code>${escapeHtml(runCommand)}</code><button type="button" class="copy-button" data-copy="${escapeHtml(runCommand)}">Copy</button></div>`
+      : '<div class="sheet-note">PocketPort did not infer a trustworthy run command, so no runner was generated.</div>';
+    openLocalSheet(
+      'PREPARED ON PHONE',
+      'Workspace ready',
+      `<div class="local-plan-status"><strong>PocketPort prepared the repository locally.</strong>No installer or project command has been executed.</div><div class="local-path">${escapeHtml(repoRoot)}</div><p class="sheet-copy">Run the generated installer when you are ready:</p><div class="command-block"><code>${escapeHtml(installCommand)}</code><button type="button" class="copy-button" data-copy="${escapeHtml(installCommand)}">Copy</button></div>${runHtml}`,
     );
   }
 
@@ -256,10 +303,40 @@
     }
   }
 
+  async function prepareCurrentRepository() {
+    if (preparing || !canPrepareLocally()) return;
+    const repository = repoUrlFromRoute();
+    if (!repository) return;
+    preparing = true;
+    openLocalSheet(
+      'LOCAL DEVICE',
+      'Preparing workspace…',
+      '<div class="local-plan-status"><strong>PocketPort is downloading a clean copy into its own workspace.</strong>It will write report, execution plan, installer and optional runner files. Nothing will be executed.</div>',
+    );
+    try {
+      const payload = await prepareRepository(repository);
+      renderPreparedPayload(payload);
+    } catch (error) {
+      openLocalSheet(
+        'LOCAL DEVICE',
+        'Preparation failed',
+        `<div class="local-plan-status"><strong>PocketPort could not prepare the workspace.</strong>${escapeHtml(error?.message || 'Unknown local bridge error.')}</div>`,
+      );
+    } finally {
+      preparing = false;
+    }
+  }
+
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-bridge-connect]');
     if (!button) return;
     connect();
+  });
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-local-prepare]');
+    if (!button) return;
+    prepareCurrentRepository();
   });
 
   document.addEventListener('click', event => {
@@ -280,6 +357,8 @@
     detectLocalBridge,
     connect,
     planRepository,
+    prepareRepository,
     canPlanLocally,
+    canPrepareLocally,
   };
 })();
