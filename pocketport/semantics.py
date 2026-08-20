@@ -17,16 +17,10 @@ SUPPORT_DIRS = {
 }
 
 ROOT_STACK_MARKERS = {
-    "package.json": "node",
-    "pyproject.toml": "python",
-    "requirements.txt": "python",
-    "Cargo.toml": "rust",
-    "go.mod": "go",
-    "Dockerfile": "docker",
-    "docker-compose.yml": "docker-compose",
-    "docker-compose.yaml": "docker-compose",
-    "compose.yml": "docker-compose",
-    "compose.yaml": "docker-compose",
+    "package.json": "node", "pyproject.toml": "python", "requirements.txt": "python",
+    "Cargo.toml": "rust", "go.mod": "go", "Dockerfile": "docker",
+    "docker-compose.yml": "docker-compose", "docker-compose.yaml": "docker-compose",
+    "compose.yml": "docker-compose", "compose.yaml": "docker-compose",
 }
 
 
@@ -86,14 +80,36 @@ def _node_uses_electron(package: dict) -> bool:
     return False
 
 
+def _is_support_path(path: Path, root: Path) -> bool:
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return True
+    return any(part.lower() in SUPPORT_DIRS for part in rel.parts)
+
+
+def _is_go_main(path: Path) -> bool:
+    text = _read(path)
+    return bool(re.search(r"(?m)^\s*package\s+main\b", text) and re.search(r"\bfunc\s+main\s*\(", text))
+
+
 def _has_go_main(root: Path) -> bool:
     candidates = [root / "main.go"]
     cmd_root = root / "cmd"
     if cmd_root.is_dir():
         candidates.extend(cmd_root.glob("*/main.go"))
-    for candidate in candidates:
-        text = _read(candidate)
-        if re.search(r"(?m)^\s*package\s+main\b", text) and re.search(r"\bfunc\s+main\s*\(", text):
+    return any(_is_go_main(candidate) for candidate in candidates)
+
+
+def _has_nested_go_main(root: Path) -> bool:
+    return any(_is_go_main(path) for path in root.rglob("main.go") if not _is_support_path(path, root))
+
+
+def _has_nested_node_bin(root: Path) -> bool:
+    for path in root.rglob("package.json"):
+        if path == root / "package.json" or _is_support_path(path, root):
+            continue
+        if _node_has_bin(_read_json(path)):
             return True
     return False
 
@@ -112,13 +128,7 @@ def _skill_files(root: Path) -> list[Path]:
 def _primary_stack(root: Path) -> list[str]:
     stack: list[str] = []
     for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        try:
-            rel = path.relative_to(root)
-        except ValueError:
-            continue
-        if any(part.lower() in SUPPORT_DIRS for part in rel.parts):
+        if not path.is_file() or _is_support_path(path, root):
             continue
         name = ROOT_STACK_MARKERS.get(path.name)
         if name and name not in stack:
@@ -160,7 +170,7 @@ def classify_repository(root: Path, stack: list[str] | None = None) -> ArtifactP
             try:
                 surface = skill_files[0].parent.relative_to(root).as_posix() or "."
             except ValueError:
-                surface = "."
+                pass
         return ArtifactProfile(
             "agent-skill", False, surface, "high", [],
             ["Install into a SKILL.md-compatible agent; this repository is not a standalone process."],
@@ -169,18 +179,17 @@ def classify_repository(root: Path, stack: list[str] | None = None) -> ArtifactP
     intro = readme[:3000]
     if _node_uses_electron(package) or ("electron" in intro and "desktop" in intro):
         return ArtifactProfile(
-            "desktop-app", True, ".", "high",
-            ["graphical display environment"],
+            "desktop-app", True, ".", "high", ["graphical display environment"],
             ["Desktop GUI execution is not a normal stock-Termux target."],
         )
 
     if "python" in stack and _python_has_scripts(root):
         return ArtifactProfile("cli", True, ".", "high", [], [])
-    if "node" in stack and _node_has_bin(package):
+    if "node" in stack and (_node_has_bin(package) or _has_nested_node_bin(root)):
         return ArtifactProfile("cli", True, ".", "high", [], [])
     if "rust" in stack and (root / "src" / "main.rs").is_file():
         return ArtifactProfile("cli", True, ".", "high", [], [])
-    if "go" in stack and _has_go_main(root):
+    if "go" in stack and (_has_go_main(root) or _has_nested_go_main(root)):
         return ArtifactProfile("cli", True, ".", "high", [], [])
 
     if _root_has_compose(root):
@@ -194,18 +203,19 @@ def classify_repository(root: Path, stack: list[str] | None = None) -> ArtifactP
             return ArtifactProfile("service", True, ".", "medium", ["long-running service environment"], [])
         return ArtifactProfile("application", True, ".", "medium", [], [])
 
+    no_launch_note = "PocketPort did not find a trustworthy launch command in project metadata."
     if "python" in stack:
-        return ArtifactProfile("library", False, ".", "medium", [], ["Installable Python package; no standalone entrypoint was detected."])
+        return ArtifactProfile("library", False, ".", "medium", [], ["Installable Python package; no standalone entrypoint was detected.", no_launch_note])
     if "rust" in stack:
         if (root / "src" / "lib.rs").is_file():
-            return ArtifactProfile("library", False, ".", "high", [], ["Rust library crate; no standalone binary target was detected."])
+            return ArtifactProfile("library", False, ".", "high", [], ["Rust library crate; no standalone binary target was detected.", no_launch_note])
         return ArtifactProfile("application", True, ".", "low", [], [])
     if "go" in stack:
-        return ArtifactProfile("library", False, ".", "medium", [], ["Go module without a proven main package."])
+        return ArtifactProfile("library", False, ".", "medium", [], ["Go module without a proven main package.", no_launch_note])
     if "node" in stack:
         if package.get("private") is True and package.get("workspaces"):
             return ArtifactProfile("application", True, ".", "low", [], ["Workspace repository; runnable surface must be selected from components."])
-        return ArtifactProfile("library", False, ".", "medium", [], ["Node package without a proven bin/start entrypoint."])
+        return ArtifactProfile("library", False, ".", "medium", [], ["Node package without a proven bin/start entrypoint.", no_launch_note])
     if "docker-compose" in stack:
         return ArtifactProfile("container-stack", True, ".", "high", ["Linux container/service environment"], [])
 
@@ -256,7 +266,6 @@ def apply_semantics(report: ScanReport, root: Path) -> ArtifactProfile:
 
     capability_findings, requirements = _capability_findings(root, profile)
     cleaned.extend(capability_findings)
-
     report.findings = cleaned
     report.stack = primary_stack
     report.score = _score(cleaned)
@@ -264,10 +273,7 @@ def apply_semantics(report: ScanReport, root: Path) -> ArtifactProfile:
     if any(f.kind == "capability" and f.severity == "high" and f.scope == "runtime" for f in cleaned):
         report.strategy = "hybrid" if report.strategy == "native" else report.strategy
 
-    return ArtifactProfile(
-        profile.type, profile.runnable, profile.primary_surface, profile.confidence,
-        requirements, profile.notes,
-    )
+    return ArtifactProfile(profile.type, profile.runnable, profile.primary_surface, profile.confidence, requirements, profile.notes)
 
 
 def semantic_scan(root: Path) -> tuple[ScanReport, ArtifactProfile]:
