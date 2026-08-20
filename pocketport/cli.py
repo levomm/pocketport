@@ -15,6 +15,7 @@ from .components import assess_components
 from .doctor import inspect_runtime_capabilities
 from .execution import build_execution_plan
 from .scanner import scan
+from .semantics import ArtifactProfile, semantic_scan
 from .generator import write_generated
 from .patcher import patch_repo
 from .release import choose_release_asset, normalize_arch
@@ -32,42 +33,43 @@ def _resolve_target(target: str):
     p = Path(target).expanduser()
     if p.exists():
         return p.resolve(), None
-
     if target.startswith(("https://github.com/", "git@github.com:")):
         td = tempfile.TemporaryDirectory(prefix="pocketport-")
         path = Path(td.name) / "repo"
         _clone(target, path)
         return path, td
-
     raise SystemExit(f"Target does not exist and is not a GitHub URL: {target}")
 
 
-def _print_report(report) -> None:
+def _print_report(report, artifact: ArtifactProfile) -> None:
     root = Path(report.path)
     print(f"PocketPort score: {report.score}/100")
     print(f"Strategy: {report.strategy}")
+    print(f"Type: {artifact.type}")
     print(f"Stack: {', '.join(report.stack)}")
+    if artifact.requirements:
+        print("Requirements:")
+        for requirement in artifact.requirements:
+            print(f"- {requirement}")
 
     components = assess_components(root, report.findings)
     if components:
         print("Components:")
         for component in components[:12]:
             stack = ", ".join(component.stack)
-            print(
-                f"- {component.name:12} [{component.role}] {component.strategy} "
-                f"{component.score}/100 | {stack} [{component.path}]"
-            )
+            print(f"- {component.name:12} [{component.role}] {component.strategy} {component.score}/100 | {stack} [{component.path}]")
 
     plan = build_execution_plan(report, root)
     print("Execution plan:")
-    print(
-        f"- {plan.status} | {plan.method} | {plan.component.name} "
-        f"[{plan.component.path}] | {plan.component.strategy}"
-    )
+    print(f"- {plan.status} | {plan.method} | {plan.component.name} [{plan.component.path}] | {plan.component.strategy}")
+    for command in plan.install:
+        print(f"- install: {command}")
     if plan.run:
         print(f"- run: {plan.run[0]}")
-    else:
+    elif artifact.runnable:
         print("- run: unresolved")
+    else:
+        print("- run: not applicable")
 
     if report.findings:
         print("")
@@ -78,9 +80,10 @@ def _print_report(report) -> None:
         print("No obvious Termux blockers found.")
 
 
-def _json_report(report) -> dict:
+def _json_report(report, artifact: ArtifactProfile) -> dict:
     root = Path(report.path)
     payload = report.to_dict()
+    payload["artifact"] = artifact.to_dict()
     components = assess_components(root, report.findings)
     if components:
         payload["components"] = [asdict(component) for component in components]
@@ -91,11 +94,11 @@ def _json_report(report) -> dict:
 def cmd_scan(args) -> int:
     root, td = _resolve_target(args.target)
     try:
-        report = scan(root)
+        report, artifact = semantic_scan(root)
         if args.json:
-            print(json.dumps(_json_report(report), indent=2))
+            print(json.dumps(_json_report(report, artifact), indent=2))
         else:
-            _print_report(report)
+            _print_report(report, artifact)
         return 0
     finally:
         if td:
@@ -106,7 +109,6 @@ def cmd_patch(args) -> int:
     root = Path(args.path).expanduser().resolve()
     before = scan(root)
     report = patch_repo(root, dry_run=args.dry_run, backup=args.backup)
-
     print(f"Patch mode: {'dry-run' if args.dry_run else 'write'}")
     print(f"Files changed: {len(report.files_changed)}")
     print(f"Changes: {len(report.changes)}")
@@ -115,10 +117,8 @@ def cmd_patch(args) -> int:
         if args.verbose:
             print(f"    - {change.before}")
             print(f"    + {change.after}")
-
     for warning in report.warnings:
         print(f"! {warning}")
-
     if not args.dry_run:
         after = scan(root)
         print(f"Score: {before.score}/100 -> {after.score}/100")
@@ -141,7 +141,6 @@ def cmd_prepare(args) -> int:
     patch = patch_repo(root, dry_run=False, backup=args.backup)
     after = scan(root)
     script = write_generated(after, root)
-
     print(f"Patched {len(patch.files_changed)} files ({len(patch.changes)} changes)")
     print(f"Score: {before.score}/100 -> {after.score}/100")
     print(f"Strategy: {before.strategy} -> {after.strategy}")
@@ -156,7 +155,6 @@ def cmd_run(args) -> int:
     if not command:
         print("Usage: pocketport run -- <command> [args...]", file=sys.stderr)
         return 2
-
     if "com.termux" in os.environ.get("PREFIX", ""):
         print("[PocketPort] Termux runtime compatibility enabled")
     return run_compat(command)
@@ -169,7 +167,6 @@ def cmd_asset(args) -> int:
     except (RuntimeError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
-
     print(f"Architecture: {arch}")
     if choice is None:
         print("No suitable release asset found.")
@@ -197,7 +194,6 @@ def cmd_doctor(args) -> int:
         print(f"{cmd:13} {'ok' if shutil.which(cmd) else 'missing'}")
     if termux:
         print("PREFIX:", prefix)
-
     print("\nRuntime capabilities:")
     for capability in inspect_runtime_capabilities():
         detail = f" - {capability.detail}" if capability.detail else ""
@@ -206,10 +202,7 @@ def cmd_doctor(args) -> int:
 
 
 def build_parser():
-    p = argparse.ArgumentParser(
-        prog="pocketport",
-        description="Make desktop-first GitHub projects less hostile to Android/Termux.",
-    )
+    p = argparse.ArgumentParser(prog="pocketport", description="Make desktop-first GitHub projects less hostile to Android/Termux.")
     sub = p.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("scan", help="scan a local repo or GitHub URL")
@@ -246,7 +239,6 @@ def build_parser():
 
     d = sub.add_parser("doctor", help="inspect the current Android/Termux toolchain")
     d.set_defaults(func=cmd_doctor)
-
     return p
 
 
