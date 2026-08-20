@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 from .components import assess_components
 from .execution import build_execution_plan
-from .scanner import scan
+from .semantics import semantic_scan
 
 
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
@@ -161,8 +161,6 @@ def _extract_archive(
                 target.mkdir(parents=True, exist_ok=True)
                 continue
 
-            # Scanner input never needs links, devices, FIFOs or other special
-            # archive entries. Ignoring them also prevents link-based escapes.
             if not member.isfile():
                 continue
 
@@ -192,15 +190,14 @@ def scan_public_github(repository: str) -> dict:
         _download_archive(repo, archive)
         _extract_archive(archive, root)
 
-        report = scan(root)
+        report, artifact = semantic_scan(root)
         payload = report.to_dict()
+        payload["artifact"] = artifact.to_dict()
         components = assess_components(root, report.findings)
         if components:
             payload["components"] = [asdict(component) for component in components]
         payload["execution_plan"] = build_execution_plan(report, root).to_dict()
 
-        # A server-side /tmp path is meaningless to the browser and leaks an
-        # implementation detail. Keep the existing field but make it stable.
         payload["path"] = repo.slug
         payload["repository"] = repo.url
         return payload
