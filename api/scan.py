@@ -17,6 +17,7 @@ STATIC_ROUTES = {
     "/refresh.css": ("refresh.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/adapter.js": ("adapter.js", "text/javascript; charset=utf-8"),
+    "/bridge-probe.js": ("bridge-probe.js", "text/javascript; charset=utf-8"),
     "/recorded-scans/deepseek-harness.json": ("recorded-scans/deepseek-harness.json", "application/json; charset=utf-8"),
     "/recorded-scans/plandex.json": ("recorded-scans/plandex.json", "application/json; charset=utf-8"),
 }
