@@ -21,6 +21,22 @@ def test_termux_env_injects_atomic_publish_shim(tmp_path: Path):
     assert f"--require={shim}" in result["NODE_OPTIONS"]
 
 
+def test_termux_env_prefers_prefix_bin_over_private_node_wrapper(tmp_path: Path):
+    prefix = "/data/data/com.termux/files/usr"
+    env = {
+        "PREFIX": prefix,
+        "HOME": str(tmp_path),
+        "PATH": f"/data/data/com.termux/files/home/.openclaw-android/node/bin:{prefix}/bin:/system/bin",
+    }
+
+    result = compat_env(env, home=tmp_path)
+
+    assert result["PATH"].split(":")[0] == f"{prefix}/bin"
+    assert result["PATH"].split(":").count(f"{prefix}/bin") == 1
+    assert "/data/data/com.termux/files/home/.openclaw-android/node/bin" in result["PATH"].split(":")
+    assert result["POCKETPORT_TERMUX_NATIVE_PATH"] == "1"
+
+
 def test_non_termux_env_is_unchanged(tmp_path: Path):
     env = {"PREFIX": "/usr", "NODE_OPTIONS": "--trace-warnings"}
 
