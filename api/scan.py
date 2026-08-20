@@ -54,7 +54,7 @@ class handler(BaseHTTPRequestHandler):
         except OSError:
             self._send_json(500, {"error": "web asset unavailable", "code": "static_asset_error"})
             return
-        cache = "public, max-age=300" if relative != "index.html" else "no-store"
+        cache = "no-store" if relative in {"index.html", "bridge-probe.js"} else "public, max-age=300"
         self._send_bytes(200, body, content_type, cache_control=cache)
 
     def do_OPTIONS(self) -> None:
