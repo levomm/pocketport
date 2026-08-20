@@ -14,10 +14,34 @@ from .live_scan import _download_archive, _extract_archive, normalize_public_git
 from .semantics import semantic_scan
 
 
+_NODE_DEPENDENCY_SECTIONS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
+
+
 def _relative_cd(path: str) -> str:
     if path in {"", "."}:
         return ""
     return f"cd {shlex.quote(path)}\n"
+
+
+def _repository_has_node_dependency(root: Path, name: str) -> bool:
+    for package_json in root.rglob("package.json"):
+        try:
+            relative = package_json.relative_to(root)
+        except ValueError:
+            continue
+        if "node_modules" in relative.parts or ".git" in relative.parts:
+            continue
+        try:
+            package = json.loads(package_json.read_text("utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(package, dict):
+            continue
+        for section in _NODE_DEPENDENCY_SECTIONS:
+            dependencies = package.get(section)
+            if isinstance(dependencies, dict) and name in dependencies:
+                return True
+    return False
 
 
 def _run_command_with_forwarded_args(command: str) -> str:
@@ -38,8 +62,32 @@ def _run_command_with_forwarded_args(command: str) -> str:
     return f'{command}{separator} "$@"'
 
 
-def render_install_script(plan: ExecutionPlan) -> str:
-    install = "\n".join(plan.install)
+def _render_install_commands(plan: ExecutionPlan, *, sharp_compat: bool = False) -> str:
+    commands: list[str] = []
+    sharp_setup = [
+        'echo "[PocketPort] sharp detected; enabling Termux libvips source build"',
+        "pkg install -y libvips pkg-config",
+        "export SHARP_FORCE_GLOBAL_LIBVIPS=1",
+    ]
+    inserted = False
+    for command in plan.install:
+        tokens: list[str]
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            tokens = []
+        is_node_install = bool(tokens) and tokens[0] in {"npm", "pnpm", "yarn", "bun"} and "install" in tokens[1:]
+        if sharp_compat and not inserted and is_node_install:
+            commands.extend(sharp_setup)
+            inserted = True
+        commands.append(command)
+    if sharp_compat and not inserted:
+        commands = sharp_setup + commands
+    return "\n".join(commands)
+
+
+def render_install_script(plan: ExecutionPlan, *, sharp_compat: bool = False) -> str:
+    install = _render_install_commands(plan, sharp_compat=sharp_compat)
     install_cd = _relative_cd(plan.install_directory)
     next_steps: list[str] = []
     if plan.run:
@@ -156,6 +204,11 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
         report, artifact = semantic_scan(root)
         plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
         components = assess_components(root, report.findings)
+        sharp_compat = _repository_has_node_dependency(root, "sharp")
+        if sharp_compat:
+            if "sharp-libvips" not in plan.compatibility:
+                plan.compatibility.append("sharp-libvips")
+            plan.notes.append("Sharp detected; prepared install will build it against Termux libvips when Android has no prebuilt binary.")
 
         metadata = root / ".pocketport"
         metadata.mkdir(parents=True, exist_ok=True)
@@ -170,7 +223,7 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
         (metadata / "execution-plan.json").write_text(json.dumps(plan.to_dict(), indent=2), "utf-8")
 
         installer = root / "termux-install.sh"
-        installer.write_text(render_install_script(plan), "utf-8")
+        installer.write_text(render_install_script(plan, sharp_compat=sharp_compat), "utf-8")
         installer.chmod(0o755)
 
         runner_path: Path | None = None
