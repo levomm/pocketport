@@ -3,14 +3,6 @@ name: live-scan-smoke
 on:
   pull_request:
     branches: ["main"]
-    paths:
-      - "pocketport/live_scan.py"
-      - "pocketport/execution.py"
-      - "api/scan.py"
-      - "web/adapter.js"
-      - "vercel.json"
-      - "tests/test_live_scan.py"
-      - ".github/workflows/live-scan-smoke.yml"
   workflow_dispatch:
 
 jobs:
