@@ -37,6 +37,21 @@ def test_install_script_prefers_termux_toolchain_before_package_manager_runs() -
     assert script.index(path_export) < script.index("npm install")
 
 
+def test_install_script_sets_android_native_target_without_overriding_explicit_target() -> None:
+    script = render_install_script(_plan())
+    assert 'getprop ro.build.version.sdk' in script
+    assert 'aarch64-linux-android30' in script
+    assert 'armv7a-linux-androideabi30' in script
+    assert 'x86_64-linux-android30' in script
+    assert 'i686-linux-android30' in script
+    assert 'POCKETPORT_ANDROID_API" -ge 30' in script
+    assert 'export POCKETPORT_ANDROID_NATIVE_TARGET="$POCKETPORT_ANDROID_TARGET"' in script
+    assert 'export CFLAGS="${CFLAGS:+$CFLAGS }-target $POCKETPORT_ANDROID_TARGET"' in script
+    assert 'export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-target $POCKETPORT_ANDROID_TARGET"' in script
+    assert '*" -target "*|*" --target"*)' in script
+    assert script.index("POCKETPORT_ANDROID_TARGET") < script.index("npm install")
+
+
 def test_run_script_enters_component_and_runs_through_pocketport() -> None:
     script = render_run_script(_plan())
     assert script is not None

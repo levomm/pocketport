@@ -50,9 +50,38 @@ export PATH="${{PREFIX}}/bin:${{PATH:-}}"
 hash -r
 export POCKETPORT_TERMUX_TOOLCHAIN=1
 
+# Some native Node modules build against Linux-flavoured assumptions even when
+# npm/pnpm correctly detects Android. On Android 11+ target API 30, the oldest
+# API level that exposes interfaces such as statx() needed by packages like
+# koffi. Respect an existing explicit compiler target instead of overwriting it.
+POCKETPORT_ANDROID_API="$(getprop ro.build.version.sdk 2>/dev/null || true)"
+POCKETPORT_ANDROID_TARGET=""
+if [[ "$POCKETPORT_ANDROID_API" =~ ^[0-9]+$ ]] && [ "$POCKETPORT_ANDROID_API" -ge 30 ]; then
+  case "$(uname -m)" in
+    aarch64|arm64) POCKETPORT_ANDROID_TARGET="aarch64-linux-android30" ;;
+    armv7l|armv8l|arm) POCKETPORT_ANDROID_TARGET="armv7a-linux-androideabi30" ;;
+    x86_64|amd64) POCKETPORT_ANDROID_TARGET="x86_64-linux-android30" ;;
+    i686|i386) POCKETPORT_ANDROID_TARGET="i686-linux-android30" ;;
+  esac
+fi
+if [ -n "$POCKETPORT_ANDROID_TARGET" ]; then
+  case " ${{CFLAGS:-}} " in
+    *" -target "*|*" --target"*) ;;
+    *) export CFLAGS="${{CFLAGS:+$CFLAGS }}-target $POCKETPORT_ANDROID_TARGET" ;;
+  esac
+  case " ${{CXXFLAGS:-}} " in
+    *" -target "*|*" --target"*) ;;
+    *) export CXXFLAGS="${{CXXFLAGS:+$CXXFLAGS }}-target $POCKETPORT_ANDROID_TARGET" ;;
+  esac
+  export POCKETPORT_ANDROID_NATIVE_TARGET="$POCKETPORT_ANDROID_TARGET"
+fi
+
 echo "[PocketPort] local prepared workspace"
 echo "[PocketPort] method={plan.method} status={plan.status}"
 echo "[PocketPort] Termux toolchain preferred for install"
+if [ -n "$POCKETPORT_ANDROID_TARGET" ]; then
+  echo "[PocketPort] Android native target=$POCKETPORT_ANDROID_TARGET"
+fi
 
 {install_cd}{install}
 
