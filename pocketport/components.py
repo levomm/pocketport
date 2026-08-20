@@ -21,10 +21,6 @@ COMPONENT_ROLES = {
     "app": "application",
 }
 
-# Conventional directories that directly contain real project components.
-# A random nested directory named `cli` or `server` should not become a
-# component just because its name matches the vocabulary. This matters for
-# source fixtures such as `server/syntax/file_map/cli`.
 COMPONENT_CONTAINERS = {
     "apps", "packages", "services", "cmd", "src", "components", "modules",
 }
@@ -42,9 +38,14 @@ MARKER_STACK = {
     "compose.yaml": "docker-compose",
 }
 
+# These trees may contain Dockerfiles/package metadata, but they describe build,
+# CI, examples or development infrastructure rather than product surfaces.
 IGNORED_DIRS = {
-    ".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build",
-    "tests", "test", "docs", ".pocketport",
+    ".git", ".github", ".circleci", ".gitlab", ".devcontainer",
+    "node_modules", ".venv", "venv", "__pycache__", "dist", "build",
+    "tests", "test", "testdata", "docs", ".pocketport",
+    "fixtures", "fixture", "examples", "example", "benchmarks", "benchmark",
+    "packaging", "scripts", "script", "tools", "extra", "extras",
 }
 
 
@@ -66,7 +67,7 @@ def _iter_markers(root: Path) -> Iterable[Path]:
             rel = path.relative_to(root)
         except ValueError:
             continue
-        if any(part in IGNORED_DIRS for part in rel.parts):
+        if any(part.lower() in IGNORED_DIRS for part in rel.parts):
             continue
         yield path
 
@@ -138,9 +139,6 @@ def assess_components(root: Path, findings: list[Finding]) -> list[ComponentAsse
         ]
         stack = marker_owners[component_path]
 
-        # Scanner-level Docker findings describe the whole repository. Recreate
-        # those facts locally so component scores explain which surface actually
-        # needs adaptation instead of making every sibling look container-bound.
         if "docker-compose" in stack:
             local_findings.append(Finding(
                 "high",
