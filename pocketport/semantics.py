@@ -9,33 +9,11 @@ from .scanner import Finding, ScanReport, _score, _strategy, scan as raw_scan
 
 
 SUPPORT_DIRS = {
-    ".git",
-    ".github",
-    ".circleci",
-    ".gitlab",
-    ".devcontainer",
-    "node_modules",
-    ".venv",
-    "venv",
-    "__pycache__",
-    "dist",
-    "build",
-    "tests",
-    "test",
-    "testdata",
-    "fixtures",
-    "fixture",
-    "examples",
-    "example",
-    "benchmarks",
-    "benchmark",
-    "packaging",
-    "scripts",
-    "script",
-    "tools",
-    "extra",
-    "extras",
-    ".pocketport",
+    ".git", ".github", ".circleci", ".gitlab", ".devcontainer",
+    "node_modules", ".venv", "venv", "__pycache__", "dist", "build",
+    "tests", "test", "testdata", "fixtures", "fixture", "examples", "example",
+    "benchmarks", "benchmark", "packaging", "scripts", "script", "tools",
+    "extra", "extras", ".pocketport",
 }
 
 ROOT_STACK_MARKERS = {
@@ -85,8 +63,7 @@ def _root_package(root: Path) -> dict:
 
 
 def _python_has_scripts(root: Path) -> bool:
-    text = _read(root / "pyproject.toml")
-    return bool(re.search(r"(?m)^\s*\[project\.scripts\]\s*$", text))
+    return bool(re.search(r"(?m)^\s*\[project\.scripts\]\s*$", _read(root / "pyproject.toml")))
 
 
 def _node_has_bin(package: dict) -> bool:
@@ -110,7 +87,11 @@ def _node_uses_electron(package: dict) -> bool:
 
 
 def _has_go_main(root: Path) -> bool:
-    for candidate in [root / "main.go", *list((root / "cmd").glob("*/main.go")) if (root / "cmd").is_dir() else []]:
+    candidates = [root / "main.go"]
+    cmd_root = root / "cmd"
+    if cmd_root.is_dir():
+        candidates.extend(cmd_root.glob("*/main.go"))
+    for candidate in candidates:
         text = _read(candidate)
         if re.search(r"(?m)^\s*package\s+main\b", text) and re.search(r"\bfunc\s+main\s*\(", text):
             return True
@@ -137,7 +118,7 @@ def _primary_stack(root: Path) -> list[str]:
             rel = path.relative_to(root)
         except ValueError:
             continue
-        if rel.parts and rel.parts[0] in SUPPORT_DIRS:
+        if any(part.lower() in SUPPORT_DIRS for part in rel.parts):
             continue
         name = ROOT_STACK_MARKERS.get(path.name)
         if name and name not in stack:
@@ -174,57 +155,57 @@ def classify_repository(root: Path, stack: list[str] | None = None) -> ArtifactP
     readme = _read(root / "README.md").lower()
 
     if skill_files or (root / ".claude-plugin").is_dir():
-        notes = ["Install into a SKILL.md-compatible agent; this repository is not a standalone process."]
-        return ArtifactProfile("agent-skill", False, skill_files[0].parent.as_posix() if skill_files else ".", "high", [], notes)
-
-    if _node_uses_electron(package) or "electron" in readme[:3000] and "desktop" in readme[:3000]:
+        surface = "."
+        if skill_files:
+            try:
+                surface = skill_files[0].parent.relative_to(root).as_posix() or "."
+            except ValueError:
+                surface = "."
         return ArtifactProfile(
-            "desktop-app",
-            True,
-            ".",
-            "high",
+            "agent-skill", False, surface, "high", [],
+            ["Install into a SKILL.md-compatible agent; this repository is not a standalone process."],
+        )
+
+    intro = readme[:3000]
+    if _node_uses_electron(package) or ("electron" in intro and "desktop" in intro):
+        return ArtifactProfile(
+            "desktop-app", True, ".", "high",
             ["graphical display environment"],
             ["Desktop GUI execution is not a normal stock-Termux target."],
         )
 
     if "python" in stack and _python_has_scripts(root):
         return ArtifactProfile("cli", True, ".", "high", [], [])
-
     if "node" in stack and _node_has_bin(package):
         return ArtifactProfile("cli", True, ".", "high", [], [])
-
     if "rust" in stack and (root / "src" / "main.rs").is_file():
         return ArtifactProfile("cli", True, ".", "high", [], [])
-
     if "go" in stack and _has_go_main(root):
         return ArtifactProfile("cli", True, ".", "high", [], [])
 
     if _root_has_compose(root):
-        if "node" in stack or "python" in stack or "go" in stack or "rust" in stack:
+        if set(stack) & {"node", "python", "go", "rust"}:
             return ArtifactProfile("service", True, ".", "high", ["long-running service environment"], [])
         return ArtifactProfile("container-stack", True, ".", "high", ["Linux container/service environment"], [])
 
     if "node" in stack and _node_has_start(package):
-        if (root / "server").exists() or "server" in str(package.get("scripts", {}).get("start", "")).lower():
+        start = str(package.get("scripts", {}).get("start", "")).lower()
+        if (root / "server").exists() or "server" in start:
             return ArtifactProfile("service", True, ".", "medium", ["long-running service environment"], [])
         return ArtifactProfile("application", True, ".", "medium", [], [])
 
     if "python" in stack:
         return ArtifactProfile("library", False, ".", "medium", [], ["Installable Python package; no standalone entrypoint was detected."])
-
     if "rust" in stack:
         if (root / "src" / "lib.rs").is_file():
             return ArtifactProfile("library", False, ".", "high", [], ["Rust library crate; no standalone binary target was detected."])
         return ArtifactProfile("application", True, ".", "low", [], [])
-
     if "go" in stack:
         return ArtifactProfile("library", False, ".", "medium", [], ["Go module without a proven main package."])
-
     if "node" in stack:
         if package.get("private") is True and package.get("workspaces"):
             return ArtifactProfile("application", True, ".", "low", [], ["Workspace repository; runnable surface must be selected from components."])
         return ArtifactProfile("library", False, ".", "medium", [], ["Node package without a proven bin/start entrypoint."])
-
     if "docker-compose" in stack:
         return ArtifactProfile("container-stack", True, ".", "high", ["Linux container/service environment"], [])
 
@@ -240,21 +221,17 @@ def _capability_findings(root: Path, profile: ArtifactProfile) -> tuple[list[Fin
     packet_tokens = ("packet sniff", "packet capture", "sniffs a given network interface", "raw socket")
     if any(token in readme for token in privilege_tokens) and any(token in readme for token in packet_tokens):
         findings.append(Finding(
-            "high",
-            "capability",
+            "high", "capability",
             "Requires elevated packet-capture/network capabilities that stock Termux normally cannot grant.",
-            "README.md",
-            "runtime",
+            "README.md", "runtime",
         ))
         requirements.append("elevated packet-capture/network privileges")
 
     if profile.type == "desktop-app":
         findings.append(Finding(
-            "high",
-            "capability",
+            "high", "capability",
             "Desktop GUI runtime requires a display/session environment outside normal stock Termux.",
-            None,
-            "runtime",
+            None, "runtime",
         ))
 
     if "kubeconfig" in readme or "kubernetes cluster" in readme:
@@ -284,21 +261,15 @@ def apply_semantics(report: ScanReport, root: Path) -> ArtifactProfile:
     report.stack = primary_stack
     report.score = _score(cleaned)
     report.strategy = _strategy(cleaned, primary_stack)
-
     if any(f.kind == "capability" and f.severity == "high" and f.scope == "runtime" for f in cleaned):
         report.strategy = "hybrid" if report.strategy == "native" else report.strategy
 
     return ArtifactProfile(
-        profile.type,
-        profile.runnable,
-        profile.primary_surface,
-        profile.confidence,
-        requirements,
-        profile.notes,
+        profile.type, profile.runnable, profile.primary_surface, profile.confidence,
+        requirements, profile.notes,
     )
 
 
 def semantic_scan(root: Path) -> tuple[ScanReport, ArtifactProfile]:
     report = raw_scan(root)
-    profile = apply_semantics(report, root)
-    return report, profile
+    return report, apply_semantics(report, root)
