@@ -59,6 +59,44 @@ def test_run_script_enters_component_and_runs_through_pocketport() -> None:
     assert "pocketport run -- npm start" in script
 
 
+def test_run_script_forwards_user_arguments_to_package_manager_script() -> None:
+    script = render_run_script(_plan())
+    assert script is not None
+    assert 'if [ "$#" -gt 0 ]; then' in script
+    assert 'pocketport run -- npm start -- "$@"' in script
+
+
+def test_run_script_keeps_no_argument_launch_unchanged() -> None:
+    script = render_run_script(_plan())
+    assert script is not None
+    assert "else\n  pocketport run -- npm start\nfi" in script
+
+
+def test_pnpm_run_runner_uses_argument_separator() -> None:
+    plan = _plan()
+    plan.run = ["pocketport run -- pnpm run dsh"]
+    script = render_run_script(plan)
+    assert script is not None
+    assert 'pocketport run -- pnpm run dsh -- "$@"' in script
+
+
+def test_plain_cli_runner_forwards_arguments_without_extra_separator() -> None:
+    plan = _plan()
+    plan.run = ["pocketport run -- my-cli"]
+    script = render_run_script(plan)
+    assert script is not None
+    assert 'pocketport run -- my-cli "$@"' in script
+    assert 'my-cli -- "$@"' not in script
+
+
+def test_cargo_runner_uses_application_argument_separator() -> None:
+    plan = _plan()
+    plan.run = ["pocketport run -- cargo run --release"]
+    script = render_run_script(plan)
+    assert script is not None
+    assert 'pocketport run -- cargo run --release -- "$@"' in script
+
+
 def test_no_runner_is_generated_without_trustworthy_run_command() -> None:
     plan = _plan()
     plan.run = []
