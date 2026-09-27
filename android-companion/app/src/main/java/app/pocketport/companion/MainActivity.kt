@@ -12,7 +12,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +32,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -115,7 +113,11 @@ private data class PlanState(
     val run: List<String>,
 )
 
-private data class PreparedState(val repoRoot: String, val command: String)
+private data class PreparedState(
+    val repoRoot: String,
+    val command: String,
+    val runnerAvailable: Boolean,
+)
 
 private enum class ActiveJob {
     NONE,
@@ -220,12 +222,8 @@ private fun PocketPortApp() {
                         val root = json.optString("repo_root")
                         val hasRunner = !json.isNull("runner") && json.optString("runner").isNotBlank()
                         val quoted = shellQuote(root)
-                        val command = if (hasRunner) {
-                            "cd " + quoted + " && ./termux-install.sh && ./termux-run.sh"
-                        } else {
-                            "cd " + quoted + " && ./termux-install.sh"
-                        }
-                        prepared = PreparedState(root, command)
+                        val command = "cd " + quoted + " && ./termux-install.sh"
+                        prepared = PreparedState(root, command, hasRunner)
                         message = "Workspace prepared. Nothing has executed yet."
                     },
                     onFailure = { message = it.message ?: "Workspace preparation failed." },
@@ -761,10 +759,19 @@ private fun PreparedCard(state: PreparedState, onRun: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
             ) {
-                Text("Copy command & open Termux", fontWeight = FontWeight.Bold)
+                Text("Copy install & open Termux", fontWeight = FontWeight.Bold)
+            }
+            if (state.runnerAvailable) {
+                Text(
+                    "Runner is prepared for the next step. Some tools require arguments or a profile.",
+                    color = Muted,
+                    fontSize = 10.sp,
+                    lineHeight = 15.sp,
+                )
+                CommandLine("./termux-run.sh [arguments if required]")
             }
             Text(
-                "The APK never silently executes repository code. Paste the copied command in Termux and press Enter.",
+                "The APK installs dependencies only. It never auto-starts repository code. Paste the copied command in Termux and press Enter.",
                 color = Muted,
                 fontSize = 10.sp,
                 lineHeight = 15.sp,
