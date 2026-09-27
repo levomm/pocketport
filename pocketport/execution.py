@@ -263,9 +263,16 @@ def _compatibility_actions(report: ScanReport, component: ExecutionComponent) ->
 
 
 def _hybrid_requires_proot(report: ScanReport, component: ExecutionComponent) -> bool:
-    if component.strategy != "hybrid":
+    if report.strategy != "hybrid" and component.strategy != "hybrid":
         return False
-    findings = _component_findings(report, component)
+
+    # In monorepos the selected CLI can look native by itself while the
+    # workspace it installs from depends on native runtime packages elsewhere.
+    # DeepSeek Harness is a concrete example: apps/cli is the entry surface,
+    # but its runtime reaches workspace-native system packages that stock
+    # Termux cannot satisfy.
+    component_findings = _component_findings(report, component)
+    findings = component_findings if component.strategy == "hybrid" and component_findings else report.findings
     return any(
         finding.kind in {"node-native", "python-native"} and finding.scope == "runtime"
         for finding in findings
