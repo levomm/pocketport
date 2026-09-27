@@ -130,12 +130,13 @@ def test_run_script_keeps_no_argument_launch_unchanged() -> None:
     assert "else\n  pocketport run -- npm start\nfi" in script
 
 
-def test_pnpm_run_runner_uses_argument_separator() -> None:
+def test_pnpm_run_runner_forwards_arguments_without_separator() -> None:
     plan = _plan()
     plan.run = ["pocketport run -- pnpm run dsh"]
     script = render_run_script(plan)
     assert script is not None
-    assert 'pocketport run -- pnpm run dsh -- "$@"' in script
+    assert 'pocketport run -- pnpm run dsh "$@"' in script
+    assert 'pnpm run dsh -- "$@"' not in script
 
 
 def test_plain_cli_runner_forwards_arguments_without_extra_separator() -> None:
