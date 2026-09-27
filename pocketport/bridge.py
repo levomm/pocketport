@@ -111,7 +111,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
         self.end_headers()
         if self.command != "HEAD":
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                # Mobile browsers can close the loopback socket immediately
+                # when handing off to Termux. The response is best-effort at
+                # that point and the bridge must stay quiet and alive.
+                return
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
