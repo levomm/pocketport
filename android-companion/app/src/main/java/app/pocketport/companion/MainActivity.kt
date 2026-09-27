@@ -10,7 +10,13 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,8 +52,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,6 +69,10 @@ import java.net.URI
 import java.net.URL
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val Bg = Color(0xFF070A09)
 private val Panel = Color(0xFF0D1210)
@@ -86,10 +100,150 @@ class MainActivity : ComponentActivity() {
                 )
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
-                    PocketPortApp()
+                    PocketPortRoot()
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun PocketPortRoot() {
+    var showIntro by remember { mutableStateOf(true) }
+    if (showIntro) {
+        PocketPortLaunchIntro(onDone = { showIntro = false })
+    } else {
+        PocketPortApp()
+    }
+}
+
+@Composable
+private fun PocketPortLaunchIntro(onDone: () -> Unit) {
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 3000, easing = LinearEasing),
+        )
+        onDone()
+    }
+
+    val p = progress.value
+    val logoPhase = (p / 0.34f).coerceIn(0f, 1f)
+    val portalPhase = ((p - 0.32f) / 0.46f).coerceIn(0f, 1f)
+    val streakPhase = ((p - 0.75f) / 0.25f).coerceIn(0f, 1f)
+    val glitch = if (p < 0.34f) (sin(p * 170f) * 8f).toFloat() else 0f
+    val logoAlpha = when {
+        p < 0.05f -> p / 0.05f
+        p < 0.31f -> 1f
+        p < 0.40f -> ((0.40f - p) / 0.09f).coerceIn(0f, 1f)
+        else -> 0f
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF020403))
+            .clickable { onDone() },
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2f
+            val horizonY = size.height * 0.64f
+            val center = Offset(cx, size.height * 0.54f)
+
+            if (portalPhase > 0f) {
+                val pulse = (1f - abs(portalPhase - 0.55f) * 1.8f).coerceIn(0f, 1f)
+                val radius = size.minDimension * (0.07f + portalPhase * 0.34f)
+                drawCircle(
+                    color = Accent.copy(alpha = 0.55f * pulse),
+                    radius = radius,
+                    center = center,
+                    style = Stroke(width = 2.2f),
+                )
+                drawCircle(
+                    color = Accent.copy(alpha = 0.20f * pulse),
+                    radius = radius * 0.72f,
+                    center = center,
+                    style = Stroke(width = 1.2f),
+                )
+                drawCircle(
+                    color = Accent.copy(alpha = 0.12f * pulse),
+                    radius = radius * 1.20f,
+                    center = center,
+                    style = Stroke(width = 5f),
+                )
+                drawLine(
+                    color = Accent.copy(alpha = 0.48f * pulse),
+                    start = Offset(size.width * 0.06f, horizonY),
+                    end = Offset(size.width * 0.94f, horizonY),
+                    strokeWidth = 1.5f,
+                )
+            }
+
+            if (streakPhase > 0f) {
+                val inner = size.minDimension * (0.08f + streakPhase * 0.08f)
+                val outer = size.minDimension * (0.23f + streakPhase * 0.55f)
+                repeat(28) { index ->
+                    val angle = (index.toDouble() / 28.0) * PI * 2.0
+                    val dx = cos(angle).toFloat()
+                    val dy = sin(angle).toFloat()
+                    drawLine(
+                        color = Accent.copy(alpha = (0.08f + streakPhase * 0.34f).coerceAtMost(0.42f)),
+                        start = Offset(center.x + dx * inner, center.y + dy * inner),
+                        end = Offset(center.x + dx * outer, center.y + dy * outer),
+                        strokeWidth = if (index % 4 == 0) 2.2f else 1f,
+                    )
+                }
+            }
+
+            val coreAlpha = ((portalPhase - 0.20f) * 2.2f).coerceIn(0f, 1f) * (1f - streakPhase * 0.7f)
+            if (coreAlpha > 0f) {
+                drawCircle(
+                    color = Color(0xFFD8FFE4).copy(alpha = coreAlpha),
+                    radius = 4f + streakPhase * 16f,
+                    center = Offset(cx, horizonY),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .graphicsLayer {
+                    translationX = glitch
+                    scaleX = 0.92f + logoPhase * 0.08f
+                    scaleY = 0.92f + logoPhase * 0.08f
+                    alpha = logoAlpha
+                },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_pocketport),
+                contentDescription = null,
+                modifier = Modifier.size(112.dp),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Pocket", color = TextMain, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                Text("Port", color = Accent, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Text(
+                "GITHUB  →  ANDROID",
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp,
+            )
+        }
+
+        Text(
+            "tap to skip",
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp),
+            color = Color(0xFF526158),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 8.sp,
+        )
     }
 }
 
@@ -140,6 +294,7 @@ private fun PocketPortApp() {
     var activeJob by remember { mutableStateOf(ActiveJob.NONE) }
     var elapsedSeconds by remember { mutableStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
+    var showPlanDetails by remember { mutableStateOf(false) }
 
     fun checkBridge() {
         if (bridge.checking) return
@@ -176,6 +331,7 @@ private fun PocketPortApp() {
         elapsedSeconds = 0
         plan = null
         prepared = null
+        showPlanDetails = false
         message = "Building local execution plan..."
         executor.execute {
             val result = client.plan(repository)
@@ -254,24 +410,11 @@ private fun PocketPortApp() {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         BrandHeader()
-        BridgeCard(
-            state = bridge,
-            onCheck = ::checkBridge,
-            onOpenTermux = { copyAndOpenTermux(context, "pocketport serve") },
-        )
-
-        Text(
-            "Run more GitHub tools on Android.",
-            color = TextMain,
-            fontSize = 34.sp,
-            lineHeight = 36.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            "Native control surface for PocketPort Core in Termux. One scanner, one source of truth.",
-            color = Muted,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
+        HeroBlock()
+        StepRail(
+            bridgeConnected = bridge.connected,
+            planReady = plan != null,
+            workspaceReady = prepared != null,
         )
 
         OutlinedTextField(
@@ -286,7 +429,7 @@ private fun PocketPortApp() {
         Button(
             onClick = ::scanRepository,
             enabled = bridge.connected && !busy,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Accent,
                 contentColor = Color(0xFF061009),
@@ -295,35 +438,46 @@ private fun PocketPortApp() {
             ),
         ) {
             val label = when (activeJob) {
-                ActiveJob.SCAN -> "Scanning..."
+                ActiveJob.SCAN -> "Scanning repository..."
                 ActiveJob.PREPARE -> "Preparing..."
-                ActiveJob.NONE -> "Scan on this phone"
+                ActiveJob.NONE -> "Scan repository"
             }
             Text(label, fontWeight = FontWeight.Bold)
+        }
+
+        CompactBridgeStatus(
+            state = bridge,
+            onCheck = ::checkBridge,
+        )
+
+        if (!bridge.connected) {
+            BridgeCard(
+                state = bridge,
+                onCheck = ::checkBridge,
+                onOpenTermux = { copyAndOpenTermux(context, "pocketport serve") },
+            )
         }
 
         if (activeJob != ActiveJob.NONE) {
             OperationProgressCard(activeJob, elapsedSeconds)
         }
 
-        FlowStatusCard(
-            bridgeConnected = bridge.connected,
-            planReady = plan != null,
-            workspaceReady = prepared != null,
-            activeJob = activeJob,
-        )
+        message?.let { StatusStrip(it) }
 
-        if (!bridge.connected) {
-            Text(
-                "Open Termux, run pocketport serve, then leave Termux open in the background. Closing it disconnects the bridge.",
-                color = Warning,
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
+        plan?.let { current ->
+            ResultCard(current)
+            ResultActions(
+                showDetails = showPlanDetails,
+                onToggleDetails = { showPlanDetails = !showPlanDetails },
+                onOpenGitHub = { openRepository(context, current.repository) },
+                onUsePhone = ::prepareRepository,
+                busy = busy,
             )
+            if (showPlanDetails) {
+                PlanCard(current)
+            }
         }
 
-        message?.let { StatusStrip(it) }
-        plan?.let { current -> PlanCard(current, busy, ::prepareRepository) }
         prepared?.let { ready ->
             PreparedCard(ready) { copyAndOpenTermux(context, ready.command) }
         }
@@ -339,19 +493,154 @@ private fun BrandHeader() {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(Color(0xFF0C2A1B), RoundedCornerShape(9.dp))
-                    .border(1.dp, Color(0xFF12673F), RoundedCornerShape(9.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(">_", color = Accent, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            }
-            Text("  Pocket", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Port", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Image(
+                painter = painterResource(id = R.drawable.ic_pocketport),
+                contentDescription = "PocketPort",
+                modifier = Modifier.size(38.dp),
+            )
+            Text("  Pocket", color = TextMain, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            Text("Port", color = Accent, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
         }
-        Text("COMPANION", color = Muted, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+        Text("ANDROID", color = Muted, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+    }
+}
+
+@Composable
+private fun HeroBlock() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "ANDROID / TERMUX COMPATIBILITY",
+            color = Accent,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
+        )
+        Text(
+            "Run more GitHub tools on Android.",
+            color = TextMain,
+            fontSize = 36.sp,
+            lineHeight = 38.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            "PocketPort scans the repository, finds the Termux path, applies safe fixes, and prepares the handoff on your phone.",
+            color = Muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+    }
+}
+
+@Composable
+private fun StepRail(
+    bridgeConnected: Boolean,
+    planReady: Boolean,
+    workspaceReady: Boolean,
+) {
+    val steps = listOf(
+        Triple("01", "Scan repo", bridgeConnected),
+        Triple("02", "Connect phone", planReady),
+        Triple("03", "Run in Termux", workspaceReady),
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        steps.forEach { (number, label, active) ->
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(if (active) Color(0xFF0C1B12) else Color(0xFF0A0F0C), RoundedCornerShape(999.dp))
+                    .border(
+                        1.dp,
+                        if (active) Color(0xFF2D6A43) else Color(0xFF1F3027),
+                        RoundedCornerShape(999.dp),
+                    )
+                    .padding(horizontal = 9.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(number, color = Accent, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+                Text("  " + label, color = if (active) TextMain else Muted, fontSize = 8.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactBridgeStatus(state: BridgeState, onCheck: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0A100C), RoundedCornerShape(11.dp))
+            .border(1.dp, if (state.connected) Color(0xFF21402D) else Line, RoundedCornerShape(11.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .background(if (state.connected) Accent else Warning, CircleShape)
+            )
+            Text(
+                if (state.connected) "  PocketPort Core connected" else "  PocketPort Core offline",
+                color = if (state.connected) TextMain else Muted,
+                fontSize = 11.sp,
+            )
+        }
+        OutlinedButton(onClick = onCheck, enabled = !state.checking) {
+            Text(if (state.checking) "..." else "Check", fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+private fun ResultCard(plan: PlanState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF09110C)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF21402D)),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("POCKETPORT RESULT", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            Text(plan.repository.removePrefix("https://github.com/"), color = TextMain, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                plan.status.uppercase() + "  ·  " + plan.strategy + "  ·  " + plan.method + "  ·  score " + plan.score,
+                color = Muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 9.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ResultActions(
+    showDetails: Boolean,
+    onToggleDetails: () -> Unit,
+    onOpenGitHub: () -> Unit,
+    onUsePhone: () -> Unit,
+    busy: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onToggleDetails, modifier = Modifier.weight(1f)) {
+                Text(if (showDetails) "Hide fixes" else "View fixes", fontSize = 10.sp)
+            }
+            OutlinedButton(onClick = onOpenGitHub, modifier = Modifier.weight(1f)) {
+                Text("Open on GitHub ↗", fontSize = 10.sp)
+            }
+        }
+        Button(
+            onClick = onUsePhone,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
+        ) {
+            Text("Use on this phone", fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -695,7 +984,7 @@ private fun StatusStrip(text: String) {
 }
 
 @Composable
-private fun PlanCard(plan: PlanState, busy: Boolean, onPrepare: () -> Unit) {
+private fun PlanCard(plan: PlanState) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Panel),
@@ -718,14 +1007,6 @@ private fun PlanCard(plan: PlanState, busy: Boolean, onPrepare: () -> Unit) {
                 fontSize = 10.sp,
             )
             (plan.install + plan.run).take(3).forEach { CommandLine(it) }
-            Button(
-                onClick = onPrepare,
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
-            ) {
-                Text("Prepare on this phone", fontWeight = FontWeight.Bold)
-            }
         }
     }
 }
@@ -759,7 +1040,7 @@ private fun PreparedCard(state: PreparedState, onRun: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
             ) {
-                Text("Copy install & open Termux", fontWeight = FontWeight.Bold)
+                Text("Run in Termux", fontWeight = FontWeight.Bold)
             }
             if (state.runnerAvailable) {
                 Text(
@@ -848,6 +1129,13 @@ private fun JSONArray?.toStrings(): List<String> {
 
 private fun shellQuote(value: String): String =
     "'" + value.replace("'", "'\"'\"'") + "'"
+
+private fun openRepository(context: Context, repository: String) {
+    context.startActivity(
+        Intent(Intent.ACTION_VIEW, Uri.parse(repository))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+}
 
 private fun copyAndOpenTermux(context: Context, command: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
