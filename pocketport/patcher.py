@@ -256,14 +256,16 @@ def _package_has_dependency(data: dict, name: str) -> bool:
 def _patch_node_script(value: str, *, has_tsx: bool) -> str:
     # Some Android/Termux Node wrappers lose the following argument for options
     # such as --import/--require. The equals form is accepted by stock Node too.
+    # Only rewrite real command positions, never text passed to echo/generators.
+    command_prefix = r"(^|(?:&&|\|\||;)\s*)"
     value = re.sub(
-        r"(?<!\S)node\s+--import\s+([^\s;&|]+)",
-        r"node --import=\1",
+        command_prefix + r"node\s+--import\s+([^\s;&|]+)",
+        lambda match: f"{match.group(1)}node --import={match.group(2)}",
         value,
     )
     value = re.sub(
-        r"(?<!\S)node\s+--require\s+([^\s;&|]+)",
-        r"node --require=\1",
+        command_prefix + r"node\s+--require\s+([^\s;&|]+)",
+        lambda match: f"{match.group(1)}node --require={match.group(2)}",
         value,
     )
 
@@ -281,15 +283,20 @@ def _patch_node_script(value: str, *, has_tsx: bool) -> str:
     # tsdown's automatic/native TypeScript config loader uses Node
     # registerHooks on modern Node versions. That hook path is not reliable in
     # every Android Node build, while tsdown explicitly supports the tsx loader.
+    # Keep this scoped to actual shell command positions for the same reason.
     def patch_tsdown(match: re.Match[str]) -> str:
-        command = match.group(0)
+        prefix = match.group(1)
+        command = match.group(2)
         if "--config-loader" in command:
-            return command
-        return command.replace("tsdown", "tsdown --config-loader tsx", 1)
+            return prefix + command
+        return prefix + command.replace("tsdown", "tsdown --config-loader tsx", 1)
 
-    value = re.sub(r"(?<![\w.-])tsdown(?:[^;&|]*)", patch_tsdown, value)
+    value = re.sub(
+        r"(^|(?:&&|\|\||;)\s*)(tsdown(?:[^;&|]*))",
+        patch_tsdown,
+        value,
+    )
     return value
-
 
 def _patch_package_json(path: Path) -> tuple[str | None, list[tuple[str, str, str]], list[str]]:
     try:
