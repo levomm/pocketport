@@ -110,8 +110,13 @@
       <section class="home-view view">
         <div class="hero-block">
           <p class="eyebrow">ANDROID / TERMUX COMPATIBILITY</p>
-          <h1>Can this GitHub project run on <span>your phone?</span></h1>
-          <p class="hero-copy">Paste a repository. PocketPort reads the project, finds the Android path, and tells you what will actually run.</p>
+          <h1>Run more GitHub tools on <span>Android.</span></h1>
+          <p class="hero-copy">PocketPort scans the repository, finds the Termux path, applies safe fixes, and prepares the handoff on your phone.</p>
+          <div class="hero-steps" aria-label="PocketPort flow">
+            <span><b>01</b> Scan repo</span>
+            <span><b>02</b> Connect phone</span>
+            <span><b>03</b> Run in Termux</span>
+          </div>
         </div>
 
         <form id="scan-form" class="scan-form" novalidate>
@@ -266,7 +271,7 @@
             </div>
           </section>` : ''}
 
-        <section class="content-section">
+        <section class="content-section" id="compatibility-findings">
           <div class="section-title-row"><div><p class="eyebrow">COMPATIBILITY FINDINGS</p><h2>What PocketPort noticed</h2></div><span class="section-count mono">${(report.findings || []).length}</span></div>
           <div class="finding-groups">
             ${grouped.map(([scope, findings]) => `
@@ -281,10 +286,25 @@
 
         <section class="technical-links"><button type="button" id="raw-json">Raw scanner JSON</button><span>·</span><button type="button" data-nav="/target">Target settings</button></section>
         <div class="sticky-action-space"></div>
-        <div class="sticky-action"><button id="use-pocketport" class="primary-button" type="button"><span>Use with PocketPort</span><span class="button-arrow">↗</span></button></div>
+        <div class="sticky-action">
+          <div class="sticky-action-card">
+            <button id="use-pocketport" class="primary-button" type="button"><span>Use on this phone</span><span class="button-arrow">↗</span></button>
+            <div class="sticky-secondary">
+              <button id="view-fixes" class="secondary-button" type="button">View fixes</button>
+              <a class="secondary-button" href="${escapeHtml(repo.url)}" target="_blank" rel="noopener noreferrer">Open on GitHub ↗</a>
+            </div>
+          </div>
+        </div>
       </section>`;
 
     document.getElementById('use-pocketport').addEventListener('click', () => openUseSheet(repo, report));
+    document.getElementById('view-fixes').addEventListener('click', () => {
+      const section = document.getElementById('compatibility-findings');
+      if (!section) return;
+      const firstGroup = section.querySelector('details');
+      if (firstGroup) firstGroup.open = true;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     document.getElementById('raw-json').addEventListener('click', () => openRawSheet(report));
   }
 
