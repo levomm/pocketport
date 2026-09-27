@@ -11,9 +11,23 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css?v=2" />
-  <link rel="stylesheet" href="/refresh.css?v=3" />
+  <link rel="stylesheet" href="/refresh.css?v=4" />
 </head>
 <body>
+  <div id="pp-intro" class="pp-intro" aria-hidden="true">
+    <div class="pp-intro-grid"></div>
+    <div class="pp-intro-horizon"></div>
+    <div class="pp-intro-portal"></div>
+    <div class="pp-intro-core"></div>
+    <div class="pp-intro-streaks"></div>
+    <div class="pp-intro-logo-stack">
+      <img class="pp-intro-logo pp-intro-logo-main" src="/assets/pocketport-logo.svg" alt="" />
+      <img class="pp-intro-logo pp-intro-logo-ghost pp-intro-logo-ghost-a" src="/assets/pocketport-logo.svg" alt="" />
+      <img class="pp-intro-logo pp-intro-logo-ghost pp-intro-logo-ghost-b" src="/assets/pocketport-logo.svg" alt="" />
+    </div>
+    <div class="pp-intro-scanline"></div>
+  </div>
+
   <div class="app-shell">
     <header class="topbar">
       <button class="brand" type="button" data-nav="/" aria-label="PocketPort home">
@@ -41,6 +55,25 @@
     <div id="sheet-body" class="sheet-body"></div>
   </section>
 
+  <script>
+    (() => {
+      const intro = document.getElementById('pp-intro');
+      if (!intro) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        intro.remove();
+        return;
+      }
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        intro.classList.add('is-done');
+        window.setTimeout(() => intro.remove(), 520);
+      };
+      window.setTimeout(finish, 3000);
+      intro.addEventListener('click', finish, { once: true });
+    })();
+  </script>
   <script src="/adapter.js"></script>
   <script src="/app.js?v=3"></script>
   <script src="/bridge-probe.js?v=8"></script>
