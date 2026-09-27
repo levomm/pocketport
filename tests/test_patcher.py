@@ -76,6 +76,34 @@ def test_node_require_argument_is_joined_for_termux_wrapper(tmp_path: Path):
     assert data["scripts"]["dev"] == "node --require=tsx/cjs scripts/dev.cjs"
 
 
+def test_node_loader_text_is_not_rewritten_outside_command_position(tmp_path: Path):
+    p = tmp_path / "package.json"
+    original = "echo node --import loader.mjs"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "scripts": {"show": original},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["show"] == original
+    assert not report.files_changed
+
+
+def test_node_loader_after_shell_separator_is_rewritten(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "scripts": {"dev": "echo ready && node --import tsx/esm app.ts"},
+    }))
+
+    patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["dev"] == "echo ready && node --import=tsx/esm app.ts"
+
+
 def test_tsx_script_launcher_uses_node_import_hook(tmp_path: Path):
     p = tmp_path / "package.json"
     p.write_text(json.dumps({
@@ -137,6 +165,38 @@ def test_tsdown_is_not_rewritten_without_tsx_dependency(tmp_path: Path):
     data = json.loads(p.read_text())
 
     assert data["scripts"]["build"] == original
+    assert not report.files_changed
+
+
+def test_tsdown_text_is_not_rewritten_outside_command_position(tmp_path: Path):
+    p = tmp_path / "package.json"
+    original = "node generate.mjs tsdown"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"tsx": "^4.0.0", "tsdown": "^0.22.0"},
+        "scripts": {"build": original},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["build"] == original
+    assert not report.files_changed
+
+
+def test_echo_tsdown_is_not_rewritten(tmp_path: Path):
+    p = tmp_path / "package.json"
+    original = "echo tsdown"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"tsx": "^4.0.0", "tsdown": "^0.22.0"},
+        "scripts": {"show": original},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["show"] == original
     assert not report.files_changed
 
 
