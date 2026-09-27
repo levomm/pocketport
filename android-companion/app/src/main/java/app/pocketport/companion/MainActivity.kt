@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -510,12 +511,7 @@ private fun OperationProgressCard(job: ActiveJob, elapsed: Int) {
                 }
             }
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = Accent,
-                trackColor = Color(0xFF18231D),
-            )
+            SegmentedPulseRail(progress = progress, stageIndex = stageIndex)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -556,6 +552,68 @@ private fun OperationProgressCard(job: ActiveJob, elapsed: Int) {
                     color = Muted,
                     fontSize = 9.sp,
                     lineHeight = 14.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SegmentedPulseRail(progress: Float, stageIndex: Int) {
+    val segments = 12
+    val activeSegments = (progress * segments).toInt().coerceIn(0, segments)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        repeat(segments) { index ->
+            val filled = index < activeSegments
+            val pulse = index == activeSegments.coerceAtMost(segments - 1)
+            val segmentColor = when {
+                filled -> Accent
+                pulse -> Warning
+                else -> Color(0xFF18231D)
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(if (pulse) 9.dp else 6.dp)
+                    .background(segmentColor, RoundedCornerShape(999.dp))
+            )
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(3) { index ->
+            val done = index < stageIndex
+            val active = index == stageIndex
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .size(if (active) 16.dp else 12.dp)
+                        .background(
+                            when {
+                                done -> Accent
+                                active -> Warning
+                                else -> Color(0xFF26362D)
+                            },
+                            CircleShape,
+                        )
+                )
+                Text(
+                    when (index) {
+                        0 -> "START"
+                        1 -> "WORK"
+                        else -> "PLAN"
+                    },
+                    color = if (done || active) TextMain else Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 7.sp,
                 )
             }
         }
