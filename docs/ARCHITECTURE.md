@@ -64,7 +64,7 @@ pocketport/
 └── .github/workflows/       # CI and smoke tests
 ```
 
-## Planned Android layer
+## Android companion layer
 
 ```text
 android/
