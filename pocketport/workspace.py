@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import shlex
 import shutil
+import subprocess
 import tempfile
 
 from .components import assess_components
@@ -41,6 +42,23 @@ def _repository_has_node_dependency(root: Path, name: str) -> bool:
             dependencies = package.get(section)
             if isinstance(dependencies, dict) and name in dependencies:
                 return True
+    return False
+
+
+def _clone_public_repository(url: str, destination: Path) -> bool:
+    git = shutil.which("git")
+    if not git:
+        return False
+    result = subprocess.run(
+        [git, "clone", "--depth", "1", "--no-tags", url, str(destination)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    shutil.rmtree(destination, ignore_errors=True)
     return False
 
 
@@ -194,12 +212,19 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
     root = workspace / "repo"
 
     try:
-        _download_archive(repo, archive)
-        _extract_archive(archive, root)
-        try:
-            archive.unlink()
-        except OSError:
-            pass
+        # Prepared workspaces are execution targets, not merely scan inputs.
+        # Prefer a shallow Git clone so projects that inspect commit metadata,
+        # tags/remotes, or `git rev-parse HEAD` do not fail after preparation.
+        # Keep the archive path as a fallback for minimal environments without
+        # Git or when cloning is temporarily unavailable.
+        source_checkout = "git-shallow" if _clone_public_repository(repo.url, root) else "archive"
+        if source_checkout == "archive":
+            _download_archive(repo, archive)
+            _extract_archive(archive, root)
+            try:
+                archive.unlink()
+            except OSError:
+                pass
 
         report, artifact = semantic_scan(root)
         plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
@@ -218,6 +243,7 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
             payload["components"] = [asdict(component) for component in components]
         payload["execution_plan"] = plan.to_dict()
         payload["repository"] = repo.url
+        payload["source_checkout"] = source_checkout
 
         (metadata / "report.json").write_text(json.dumps(payload, indent=2), "utf-8")
         (metadata / "execution-plan.json").write_text(json.dumps(plan.to_dict(), indent=2), "utf-8")
@@ -241,6 +267,7 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
             "installer": str(installer),
             "runner": str(runner_path) if runner_path else None,
             "execution_plan": plan.to_dict(),
+            "source_checkout": source_checkout,
         }
     except Exception:
         shutil.rmtree(workspace, ignore_errors=True)
