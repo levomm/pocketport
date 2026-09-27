@@ -14,3 +14,11 @@ Native Android control surface for PocketPort Core running in Termux.
 8. Paste and press Enter to approve execution.
 
 The APK never runs third-party repository code silently.
+
+## Build baseline
+
+- Android Gradle Plugin 9.4.0
+- Gradle 9.6.0
+- JDK 17
+- compileSdk / targetSdk 37
+- Compose BOM 2026.09.00
