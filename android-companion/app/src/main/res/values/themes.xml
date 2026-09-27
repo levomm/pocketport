@@ -1,0 +1,7 @@
+<resources>
+<style name="Theme.PocketPort" parent="android:style/Theme.Material.NoActionBar">
+<item name="android:fontFamily">sans</item>
+<item name="android:statusBarColor">#070A09</item>
+<item name="android:navigationBarColor">#070A09</item>
+</style>
+</resources>
