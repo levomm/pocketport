@@ -6,10 +6,10 @@ The order below is intentional: prove the engine, make the flow obvious, then wr
 
 ## 0. Stabilize current core work
 
-- [ ] Resolve the two command-position rewrite findings in PR #26.
-- [ ] Run the full Python test matrix.
-- [ ] Run DeepSeek Harness smoke checks.
-- [ ] Merge only after the patcher remains conservative.
+- [x] Resolve the two command-position rewrite findings in PR #26.
+- [x] Run the full Python test matrix.
+- [x] Run DeepSeek Harness smoke checks.
+- [x] Merge only after the patcher remains conservative.
 
 ## 1. GitHub / project polish
 
@@ -17,7 +17,7 @@ The order below is intentional: prove the engine, make the flow obvious, then wr
 - [x] Tighten the README around the actual product.
 - [x] Add architecture and roadmap docs.
 - [ ] Add screenshots / short demo GIF.
-- [ ] Add SECURITY.md and issue templates.
+- [x] Add SECURITY.md and issue templates.
 - [ ] Publish a tagged release matching the package version.
 
 ## 2. Compatibility proof
@@ -61,8 +61,8 @@ The web UI should become a control surface for PocketPort Core already running i
 - [x] local execution plan
 - [x] local workspace preparation
 - [ ] clearer bridge onboarding
-- [ ] one-tap copy of install / run commands
-- [ ] Android deep-link / intent handoff where practical
+- [x] one-tap copy of install / run commands
+- [x] Android deep-link / intent handoff where practical
 - [ ] explicit bridge health and capability panel
 
 ## 5. PocketPort APK
@@ -93,7 +93,7 @@ Later, stable parts of the scanner can move into a native shared core if that be
 
 - [ ] use final PocketPort branding
 - [ ] visible proof / example result before first scan
-- [ ] install / Termux action after scan
+- [x] install / Termux action after scan
 - [ ] Open Graph image and social metadata
 - [ ] structured metadata
 - [ ] lightweight analytics for scan / copy / install actions

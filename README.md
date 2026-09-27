@@ -49,6 +49,14 @@ pocketport scan https://github.com/owner/repo
 pocketport scan https://github.com/owner/repo --json
 ```
 
+Prepare and run a public GitHub repository:
+
+```bash
+pocketport run https://github.com/owner/repo
+```
+
+PocketPort prepares an isolated workspace, applies only conservative patches, builds the execution plan, and asks before executing third-party code in Termux.
+
 Prepare a local project:
 
 ```bash
@@ -144,7 +152,9 @@ PocketPort can expose a localhost-only bridge for the web UI and the planned APK
 pocketport serve
 ```
 
-The bridge can build local execution plans and prepare PocketPort-owned workspaces. The web UI does not invent compatibility results; PocketPort Core remains the source of truth.
+The bridge can build local execution plans and prepare PocketPort-owned workspaces. When the bridge is connected, the web UI exposes **Run in Termux**: it prepares the repository locally, copies the exact generated install/run command, and opens Termux. The user still pastes and confirms the command in Termux, so the web page never silently executes shell code.
+
+The web UI does not invent compatibility results; PocketPort Core remains the source of truth.
 
 Web: https://pocketport.vercel.app/
 

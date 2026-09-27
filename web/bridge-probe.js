@@ -39,6 +39,8 @@
       .local-plan-meta span{border:1px solid #233129;border-radius:999px;padding:5px 8px;font-family:var(--mono);font-size:9px;color:#9baa9f}
       .local-prepare-button{width:100%;margin-top:14px}
       .local-path{margin-top:10px;padding:10px 12px;border:1px solid #1f2d25;border-radius:8px;background:#080d0a;font-family:var(--mono);font-size:10px;color:#8fa095;overflow-wrap:anywhere}
+      .termux-handoff{margin-top:14px}
+      .termux-handoff-note{margin-top:10px;color:#77847c;font-size:10px;line-height:1.45}
       @media(max-width:430px){.bridge-card{align-items:flex-start}.bridge-card .bridge-meta{white-space:normal}.bridge-connect{margin-top:1px}}
     `;
     document.head.appendChild(style);
@@ -129,7 +131,7 @@
       const arch = payload.arch || 'unknown';
       const version = payload.version || 'unknown';
       const detail = canPrepareLocally()
-        ? 'Local Termux bridge can plan and prepare PocketPort workspaces.'
+        ? 'Local Termux bridge is ready for Run in Termux handoff.'
         : canPlanLocally()
           ? 'Local Termux bridge is ready to build execution plans.'
           : 'Local Termux bridge is reachable.';
@@ -139,6 +141,8 @@
       const targetValue = target.querySelector('span:last-child');
       if (targetLabel) targetLabel.innerHTML = '<span class="target-dot"></span> Detected target';
       if (targetValue) targetValue.textContent = `Android / ${arch} / Termux yes`;
+      const action = resultView.querySelector('#use-pocketport span:first-child');
+      if (action && canPrepareLocally()) action.textContent = 'Run in Termux';
       return;
     }
 
@@ -269,17 +273,24 @@
     const repoRoot = payload.repo_root;
     const installCommand = `cd ${shellQuote(repoRoot)} && ./termux-install.sh`;
     const runCommand = payload.runner ? `cd ${shellQuote(repoRoot)} && ./termux-run.sh` : null;
+    const handoffCommand = runCommand
+      ? `cd ${shellQuote(repoRoot)} && ./termux-install.sh && ./termux-run.sh`
+      : installCommand;
     const runHtml = runCommand
-      ? `<p class="sheet-copy">After a successful install:</p><div class="command-block"><code>${escapeHtml(runCommand)}</code><button type="button" class="copy-button" data-copy="${escapeHtml(runCommand)}">Copy</button></div>`
-      : '<div class="sheet-note">PocketPort did not infer a trustworthy run command, so no runner was generated.</div>';
+      ? `<p class="sheet-copy">PocketPort also generated a runner:</p><div class="command-block"><code>${escapeHtml(runCommand)}</code><button type="button" class="copy-button" data-copy="${escapeHtml(runCommand)}">Copy</button></div>`
+      : '<div class="sheet-note">PocketPort did not infer a trustworthy run command, so the handoff will only install the prepared workspace.</div>';
     openLocalSheet(
-      'PREPARED ON PHONE',
-      'Workspace ready',
-      `<div class="local-plan-status"><strong>PocketPort prepared the repository locally.</strong>No installer or project command has been executed.</div><div class="local-path">${escapeHtml(repoRoot)}</div><p class="sheet-copy">Run the generated installer when you are ready:</p><div class="command-block"><code>${escapeHtml(installCommand)}</code><button type="button" class="copy-button" data-copy="${escapeHtml(installCommand)}">Copy</button></div>${runHtml}`,
+      'RUN IN TERMUX',
+      'Ready for handoff',
+      `<div class="local-plan-status"><strong>PocketPort prepared the repository locally.</strong>No installer or project command has been executed yet.</div><div class="local-path">${escapeHtml(repoRoot)}</div><button class="primary-button termux-handoff" data-open-termux data-command="${escapeHtml(handoffCommand)}" type="button"><span>Copy command & open Termux</span><span class="button-arrow">↗</span></button><div class="termux-handoff-note">PocketPort copies the exact prepared command, then opens Termux. Android does not allow this web page to silently execute shell commands. Paste the command and press Enter to approve execution.</div><p class="sheet-copy">Install command:</p><div class="command-block"><code>${escapeHtml(installCommand)}</code><button type="button" class="copy-button" data-copy="${escapeHtml(installCommand)}">Copy</button></div>${runHtml}`,
     );
   }
 
   async function usePocketPortLocally() {
+    if (canPrepareLocally()) {
+      await prepareCurrentRepository();
+      return;
+    }
     if (planning) return;
     const repository = repoUrlFromRoute();
     if (!repository) return;
@@ -337,6 +348,21 @@
     const button = event.target.closest('[data-local-prepare]');
     if (!button) return;
     prepareCurrentRepository();
+  });
+
+  document.addEventListener('click', async event => {
+    const button = event.target.closest('[data-open-termux]');
+    if (!button) return;
+    const command = button.dataset.command || '';
+    if (command) {
+      try { await navigator.clipboard.writeText(command); } catch (_) {}
+    }
+    const previous = button.querySelector('span:first-child');
+    if (previous) previous.textContent = 'Opening Termux…';
+    window.location.href = 'intent:#Intent;package=com.termux;end';
+    setTimeout(() => {
+      if (previous) previous.textContent = 'Copy command & open Termux';
+    }, 1400);
   });
 
   document.addEventListener('click', event => {
