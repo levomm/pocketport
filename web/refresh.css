@@ -291,3 +291,150 @@ textarea::placeholder { color: #465149; }
   .sticky-action-space { height: 150px; }
   .secondary-button { font-size: 8px; }
 }
+
+
+/* Phone bridge onboarding + health */
+.bridge-health-panel {
+  margin: 6px 0 34px;
+  padding: 16px;
+  border: 1px solid #203128;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(114,245,156,.035), rgba(13,18,16,.7));
+}
+.bridge-health-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.bridge-health-head h2 {
+  margin: 6px 0 0;
+  font-size: 19px;
+  letter-spacing: -.03em;
+  font-weight: 600;
+}
+.bridge-status-pill {
+  flex: 0 0 auto;
+  border: 1px solid #2a3931;
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: #7e8b83;
+  font-family: var(--mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.bridge-status-pill.is-connected {
+  border-color: rgba(114,245,156,.35);
+  background: rgba(114,245,156,.08);
+  color: #a9f3bf;
+}
+.bridge-status-pill.is-failed {
+  border-color: rgba(216,180,111,.35);
+  background: rgba(216,180,111,.06);
+  color: #d8b46f;
+}
+.bridge-health-copy {
+  margin: 13px 0 16px;
+  color: #7f8d84;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.bridge-health-body {
+  display: grid;
+  gap: 8px;
+}
+.bridge-onboarding-step {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 11px 12px;
+  border: 1px solid #1d2a23;
+  border-radius: 9px;
+  background: #0a0f0c;
+}
+.bridge-onboarding-step > span {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #2a3a30;
+  border-radius: 50%;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+.bridge-onboarding-step strong,
+.bridge-device-row strong {
+  display: block;
+  color: #d8e2db;
+  font-size: 11px;
+  font-weight: 600;
+}
+.bridge-onboarding-step code {
+  display: block;
+  margin-top: 5px;
+  color: #9fb0a5;
+  font-size: 10px;
+}
+.bridge-onboarding-step small,
+.bridge-device-row span {
+  display: block;
+  margin-top: 4px;
+  color: #65736a;
+  font-size: 9px;
+  line-height: 1.45;
+}
+.bridge-health-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.bridge-health-actions .primary-button,
+.bridge-health-actions .secondary-button {
+  min-height: 46px;
+}
+.bridge-device-row {
+  padding: 12px;
+  border: 1px solid #21402d;
+  border-radius: 9px;
+  background: rgba(114,245,156,.035);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bridge-device-row .bridge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.bridge-capabilities {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bridge-capabilities span {
+  padding: 5px 7px;
+  border: 1px solid #23342a;
+  border-radius: 999px;
+  color: #819087;
+  font-family: var(--mono);
+  font-size: 8px;
+}
+.bridge-card-actions {
+  display: flex;
+  gap: 6px;
+}
+@media (max-width: 430px) {
+  .bridge-health-panel { margin-bottom: 28px; padding: 13px; }
+  .bridge-health-head h2 { font-size: 17px; }
+  .bridge-health-actions { grid-template-columns: 1fr; }
+  .bridge-health-actions .primary-button,
+  .bridge-health-actions .secondary-button { min-height: 44px; }
+  .bridge-card-actions { flex-direction: column; }
+}
