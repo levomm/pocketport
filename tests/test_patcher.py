@@ -422,3 +422,36 @@ def test_patched_termux_shebang_is_not_flagged_again(tmp_path: Path):
     report = scan(tmp_path)
 
     assert not any(f.kind == "patchable" and "bash path" in f.detail for f in report.findings)
+
+
+def test_lefthook_postinstall_is_skipped_on_android(tmp_path: Path):
+    p = tmp_path / "package.json"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"lefthook": "^2.1.9"},
+        "scripts": {"postinstall": "node scripts/install-lefthook.mjs"},
+    }))
+
+    patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    patched = data["scripts"]["postinstall"]
+    assert "process.platform==='android'" in patched
+    assert "skipping Lefthook on Android" in patched
+    assert "scripts/install-lefthook.mjs" in patched
+
+
+def test_nonstandard_lefthook_postinstall_is_left_untouched(tmp_path: Path):
+    p = tmp_path / "package.json"
+    original = "node scripts/install-lefthook.mjs --custom"
+    p.write_text(json.dumps({
+        "name": "demo",
+        "devDependencies": {"lefthook": "^2.1.9"},
+        "scripts": {"postinstall": original},
+    }))
+
+    report = patch_repo(tmp_path)
+    data = json.loads(p.read_text())
+
+    assert data["scripts"]["postinstall"] == original
+    assert not report.files_changed

@@ -309,12 +309,25 @@ def _patch_package_json(path: Path) -> tuple[str | None, list[tuple[str, str, st
         return None, [], []
 
     has_tsx = _package_has_dependency(data, "tsx")
+    has_lefthook = _package_has_dependency(data, "lefthook")
     changed = []
     warnings = []
     for name, value in list(scripts.items()):
         if not isinstance(value, str):
             continue
         original = value
+        if (
+            name == "postinstall"
+            and has_lefthook
+            and value.strip() in {"node scripts/install-lefthook.mjs", "node ./scripts/install-lefthook.mjs"}
+        ):
+            value = (
+                "node -e \"if(process.platform==='android'){"
+                "console.log('[PocketPort] skipping Lefthook on Android');process.exit(0)}"
+                "const r=require('node:child_process').spawnSync(process.execPath,"
+                "['scripts/install-lefthook.mjs'],{stdio:'inherit'});"
+                "process.exit(r.status??1)\""
+            )
         value = _patch_node_script(value, has_tsx=has_tsx)
         if not any(x in value for x in SHELL_META):
             value = _remove_sudo_prefix(value)
