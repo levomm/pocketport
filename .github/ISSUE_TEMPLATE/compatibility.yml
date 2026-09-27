@@ -1,0 +1,42 @@
+name: Compatibility report
+description: Report whether a public project works through PocketPort on Android / Termux
+title: "[compat] owner/repo on Android "
+labels: ["compatibility"]
+body:
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      placeholder: https://github.com/owner/repo
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device / Android / architecture
+      placeholder: Galaxy S24+, Android 16, arm64
+    validations:
+      required: true
+  - type: dropdown
+    id: strategy
+    attributes:
+      label: PocketPort strategy
+      options:
+        - native
+        - hybrid
+        - proot
+        - unknown
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands used
+      render: shell
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: What worked, what failed, and the first meaningful error.
+    validations:
+      required: true

@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible PocketPort bug
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a reproducible failure. Please avoid posting secrets or private repository contents.
+  - type: input
+    id: version
+    attributes:
+      label: PocketPort version / commit
+      placeholder: 0.3.8 or git SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Android / Termux environment
+      placeholder: Android 16, arm64, Termux 0.xxx
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Commands, repository URL, and the smallest useful sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      render: shell
