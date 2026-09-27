@@ -29,7 +29,7 @@ DeepSeek Harness is the reference project.
 - [x] shell execution.
 - [x] session persistence.
 - [x] native filesystem read/write.
-- [ ] Publish a compact compatibility report in the README.
+- [x] Publish a compact compatibility report in the README.
 - [ ] Capture a 10-15 second end-to-end demo.
 - [ ] Add another reference project with a different stack.
 
