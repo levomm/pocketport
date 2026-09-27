@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" role="img" aria-labelledby="title desc">
+  <title id="title">PocketPort</title>
+  <desc id="desc">PocketPort logo with terminal phone and port symbol.</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8affc1"/>
+      <stop offset="0.45" stop-color="#28f58d"/>
+      <stop offset="1" stop-color="#00c86b"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(28 18) scale(.55)">
+    <rect x="24" y="24" width="464" height="464" rx="112" fill="#06100a" stroke="#12673f" stroke-width="8"/>
+    <rect x="112" y="72" width="288" height="320" rx="54" fill="none" stroke="url(#g)" stroke-width="20"/>
+    <rect x="214" y="94" width="84" height="14" rx="7" fill="url(#g)"/>
+    <path d="M174 164l42 42-42 42" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M232 248h58" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M104 424l78-110c18-25 45-40 74-40s56 15 74 40l78 110" fill="#07120b" stroke="url(#g)" stroke-width="22" stroke-linejoin="round"/>
+    <path d="M210 352h92M198 382h116M184 414h144" stroke="url(#g)" stroke-width="14" stroke-linecap="round"/>
+  </g>
+  <text x="360" y="197" fill="#eafff2" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="126" font-weight="700" letter-spacing="-5">Pocket</text>
+  <text x="752" y="197" fill="url(#g)" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="126" font-weight="700" letter-spacing="-5">Port</text>
+</svg>
