@@ -72,7 +72,7 @@ def _run_command_with_forwarded_args(command: str) -> str:
         tokens = []
 
     needs_separator = False
-    if len(tokens) >= 2 and tokens[0] in {"npm", "pnpm"}:
+    if len(tokens) >= 2 and tokens[0] == "npm":
         needs_separator = tokens[1] == "run" or tokens[1] in {"start", "test"}
     elif len(tokens) >= 2 and tokens[0] == "cargo" and tokens[1] == "run":
         needs_separator = True
