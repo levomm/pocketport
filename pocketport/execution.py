@@ -262,6 +262,16 @@ def _compatibility_actions(report: ScanReport, component: ExecutionComponent) ->
     return compatibility, notes
 
 
+def _hybrid_requires_proot(report: ScanReport, component: ExecutionComponent) -> bool:
+    if component.strategy != "hybrid":
+        return False
+    findings = _component_findings(report, component)
+    return any(
+        finding.kind in {"node-native", "python-native"} and finding.scope == "runtime"
+        for finding in findings
+    )
+
+
 def _proot_install_commands() -> list[str]:
     return ["pkg update -y", "pkg install -y proot-distro git", "proot-distro install ubuntu:24.04"]
 
@@ -314,7 +324,11 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
         )
 
     compatibility, notes = _compatibility_actions(report, component)
-    if component.strategy == "proot":
+    if component.strategy == "proot" or _hybrid_requires_proot(report, component):
+        if component.strategy == "hybrid":
+            if "proot" not in compatibility:
+                compatibility.append("proot")
+            notes.append("Runtime native dependencies plus hybrid compatibility signals make direct Termux execution unreliable; PocketPort routes this component through PRoot.")
         return ExecutionPlan(
             status="fallback", target={"platform": "android", "termux": True, "arch": "aarch64"},
             component=component, method="proot", install_directory=".", working_directory=component.path,
