@@ -12,6 +12,7 @@ from .components import assess_components
 from .entrypoints import enrich_workspace_entrypoint
 from .execution import ExecutionPlan, build_execution_plan
 from .live_scan import _download_archive, _extract_archive, normalize_public_github_url
+from .patcher import patch_repo
 from .semantics import semantic_scan
 
 
@@ -226,6 +227,8 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
             except OSError:
                 pass
 
+        before_report, _ = semantic_scan(root)
+        patch = patch_repo(root, dry_run=False, backup=False)
         report, artifact = semantic_scan(root)
         plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
         components = assess_components(root, report.findings)
@@ -244,6 +247,11 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
         payload["execution_plan"] = plan.to_dict()
         payload["repository"] = repo.url
         payload["source_checkout"] = source_checkout
+        payload["patch"] = patch.to_dict()
+        payload["pre_patch"] = {
+            "score": before_report.score,
+            "strategy": before_report.strategy,
+        }
 
         (metadata / "report.json").write_text(json.dumps(payload, indent=2), "utf-8")
         (metadata / "execution-plan.json").write_text(json.dumps(plan.to_dict(), indent=2), "utf-8")
@@ -268,6 +276,11 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
             "runner": str(runner_path) if runner_path else None,
             "execution_plan": plan.to_dict(),
             "source_checkout": source_checkout,
+            "patch": patch.to_dict(),
+            "pre_patch": {
+                "score": before_report.score,
+                "strategy": before_report.strategy,
+            },
         }
     except Exception:
         shutil.rmtree(workspace, ignore_errors=True)

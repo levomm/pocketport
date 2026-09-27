@@ -21,6 +21,7 @@ from .generator import write_generated
 from .patcher import patch_repo
 from .release import choose_release_asset, normalize_arch
 from .runtime import run_compat
+from .workspace import prepare_public_github
 
 
 def _clone(url: str, dest: Path) -> Path:
@@ -149,13 +150,71 @@ def cmd_prepare(args) -> int:
     return 0
 
 
+def _is_public_github_url(value: str) -> bool:
+    return value.startswith("https://github.com/") and value.count("/") >= 4
+
+
+def _run_prepared_repository(repository: str, *, assume_yes: bool = False) -> int:
+    prepared = prepare_public_github(repository)
+    plan = prepared["execution_plan"]
+    patch = prepared.get("patch") or {}
+    repo_root = prepared["repo_root"]
+    installer = prepared["installer"]
+    runner = prepared.get("runner")
+
+    print(f"[PocketPort] repository: {prepared['repository']}")
+    print(f"[PocketPort] strategy: {plan['strategy'] if 'strategy' in plan else plan.get('method', 'unknown')}")
+    print(f"[PocketPort] status: {plan.get('status', 'unknown')}")
+    print(f"[PocketPort] workspace: {repo_root}")
+    print(f"[PocketPort] safe patch changes: {len(patch.get('changes', []))}")
+
+    if not runner:
+        print("[PocketPort] prepared successfully, but no trustworthy run command was inferred.")
+        print(f"[PocketPort] installer: {installer}")
+        return 3
+
+    if "com.termux" not in os.environ.get("PREFIX", ""):
+        print("[PocketPort] prepared successfully. Automatic install/run is only enabled inside Termux.")
+        print(f"[PocketPort] installer: {installer}")
+        print(f"[PocketPort] runner: {runner}")
+        return 0
+
+    if not assume_yes:
+        if not sys.stdin.isatty():
+            print("[PocketPort] refusing to execute third-party code without interactive approval.", file=sys.stderr)
+            print("[PocketPort] re-run with --yes only after reviewing the generated plan.", file=sys.stderr)
+            return 4
+        answer = input("Install and run this repository now? [y/N] ").strip().lower()
+        if answer not in {"y", "yes"}:
+            print("[PocketPort] prepared only; nothing executed.")
+            return 0
+
+    print("[PocketPort] executing generated installer")
+    install_result = subprocess.run([installer], cwd=repo_root, check=False)
+    if install_result.returncode != 0:
+        print(f"[PocketPort] installer failed with exit code {install_result.returncode}", file=sys.stderr)
+        return install_result.returncode or 1
+
+    print("[PocketPort] launching prepared project")
+    return subprocess.run([runner], cwd=repo_root, check=False).returncode
+
+
 def cmd_run(args) -> int:
     command = list(args.command_args)
+    assume_yes = False
+    if command and command[0] == "--yes":
+        assume_yes = True
+        command = command[1:]
     if command and command[0] == "--":
         command = command[1:]
+
+    if len(command) == 1 and _is_public_github_url(command[0]):
+        return _run_prepared_repository(command[0], assume_yes=assume_yes)
+
     if not command:
-        print("Usage: pocketport run -- <command> [args...]", file=sys.stderr)
+        print("Usage: pocketport run [--yes] <github-url> | pocketport run -- <command> [args...]", file=sys.stderr)
         return 2
+
     if "com.termux" in os.environ.get("PREFIX", ""):
         print("[PocketPort] Termux runtime compatibility enabled")
     return run_compat(command)
@@ -232,7 +291,7 @@ def build_parser():
     prep.add_argument("--backup", action="store_true")
     prep.set_defaults(func=cmd_prepare)
 
-    run = sub.add_parser("run", help="run a command with Termux runtime compatibility shims")
+    run = sub.add_parser("run", help="prepare/run a GitHub repository or run a command with Termux compatibility shims")
     run.add_argument("command_args", nargs=argparse.REMAINDER)
     run.set_defaults(func=cmd_run)
 
