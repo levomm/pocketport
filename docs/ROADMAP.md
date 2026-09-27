@@ -79,13 +79,17 @@ PocketPort APK
   -> View logs / report
 ```
 
-Suggested first implementation:
+First implementation:
 
-- Kotlin + Jetpack Compose
-- PocketPort Core remains Python in Termux
-- loopback bridge for local planning / preparation
-- Android intents for handoff
-- no root requirement
+- [x] Kotlin + Jetpack Compose project scaffold
+- [x] PocketPort Core remains Python in Termux
+- [x] loopback bridge health / local planning
+- [x] local workspace preparation
+- [x] Android intent handoff to Termux
+- [x] no root requirement
+- [x] GitHub Actions debug APK build
+- [ ] install and verify the generated APK on the reference Android 16 phone
+- [ ] add native report detail / logs view
 
 Later, stable parts of the scanner can move into a native shared core if that becomes useful.
 
