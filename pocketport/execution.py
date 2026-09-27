@@ -332,9 +332,9 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
 
     compatibility, notes = _compatibility_actions(report, component)
     if component.strategy == "proot" or _hybrid_requires_proot(report, component):
-        if component.strategy == "hybrid":
-            if "proot" not in compatibility:
-                compatibility.append("proot")
+        if "proot" not in compatibility:
+            compatibility.append("proot")
+        if report.strategy == "hybrid" or component.strategy == "hybrid":
             notes.append("Runtime native dependencies plus hybrid compatibility signals make direct Termux execution unreliable; PocketPort routes this component through PRoot.")
         return ExecutionPlan(
             status="fallback", target={"platform": "android", "termux": True, "arch": "aarch64"},
