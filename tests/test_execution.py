@@ -121,3 +121,35 @@ def test_proot_plan_stays_explicitly_fallback(tmp_path: Path) -> None:
     assert plan.run == []
     assert "proot" in plan.compatibility
     assert "proot-distro install ubuntu:24.04" in plan.install
+
+
+def test_hybrid_runtime_native_dependency_routes_to_proot(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name":"demo","bin":"./cli.js","dependencies":{"node-pty":"1.0.0"}}',
+        "utf-8",
+    )
+    (tmp_path / "cli.js").write_text("console.log('ok')\n", "utf-8")
+
+    report = ScanReport(
+        path=str(tmp_path),
+        stack=["node"],
+        score=42,
+        strategy="hybrid",
+        findings=[
+            __import__("pocketport.scanner", fromlist=["Finding"]).Finding(
+                "medium",
+                "node-native",
+                "node-pty: native PTY addon",
+                "package.json",
+                "runtime",
+            )
+        ],
+    )
+
+    plan = build_execution_plan(report, tmp_path)
+
+    assert plan.status == "fallback"
+    assert plan.method == "proot"
+    assert plan.run == []
+    assert "proot" in plan.compatibility
+    assert "proot-distro install ubuntu:24.04" in plan.install
