@@ -21,6 +21,6 @@ The APK never runs third-party repository code silently.
 - Gradle 9.6.0
 - JDK 17
 - compileSdk / targetSdk 36
-- Compose BOM 2026.09.00
+- Compose BOM 2025.12.00
 
 Reference compatibility proof remains in the root README and experiments directory; the companion consumes PocketPort Core output rather than reimplementing scanner logic.
