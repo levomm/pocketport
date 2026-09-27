@@ -314,7 +314,22 @@
     app.innerHTML = `
       <section class="target-view view">
         <button type="button" class="back-link" onclick="history.length > 1 ? history.back() : location.assign('/')">← Back</button>
-        <div class="target-header"><p class="eyebrow">TARGET DEVICE</p><h1>Tell PocketPort what phone you mean.</h1><p>The browser cannot reliably inspect Termux or PRoot. These are declared assumptions until PocketPort runs directly on-device.</p></div>
+        <div class="target-header"><p class="eyebrow">TARGET DEVICE</p><h1>Tell PocketPort what phone you mean.</h1><p>The browser cannot reliably inspect Termux or PRoot until PocketPort Core is running locally.</p></div>
+        <section class="bridge-health-panel" data-bridge-health>
+          <div class="bridge-health-head">
+            <div><p class="eyebrow">PHONE BRIDGE</p><h2>Connect PocketPort Core</h2></div>
+            <span class="bridge-status-pill" data-bridge-status>Not checked</span>
+          </div>
+          <p class="bridge-health-copy">PocketPort Core runs in Termux. Once connected, this web UI can build execution plans and prepare workspaces directly on your phone.</p>
+          <div class="bridge-health-body" data-bridge-health-body>
+            <div class="bridge-onboarding-step"><span>1</span><div><strong>Start the bridge in Termux</strong><code>pocketport serve</code></div></div>
+            <div class="bridge-onboarding-step"><span>2</span><div><strong>Return here and check connection</strong><small>The bridge stays on localhost. Nothing is exposed to the internet.</small></div></div>
+          </div>
+          <div class="bridge-health-actions">
+            <button class="secondary-button" type="button" data-open-termux data-command="pocketport serve">Copy command & open Termux</button>
+            <button class="primary-button" type="button" data-bridge-connect>Check connection <span class="button-arrow">↗</span></button>
+          </div>
+        </section>
         <form id="target-form" class="target-form">
           <div class="setting-row locked"><div><label>Platform</label><p>Mobile operating system</p></div><strong class="mono">Android</strong></div>
           <fieldset class="setting-block"><legend>Architecture</legend><div class="segmented">${['arm64','arm','x86_64'].map(v => `<label><input type="radio" name="arch" value="${v}" ${target.arch === v ? 'checked' : ''}><span class="mono">${v}</span></label>`).join('')}</div></fieldset>

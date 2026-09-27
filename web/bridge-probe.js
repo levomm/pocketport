@@ -112,6 +112,37 @@
     return Number(payload.api || 0) >= 3 && hasCapability('prepare-workspace');
   }
 
+  function renderBridgeHealthPanel() {
+    ensureStyles();
+    const panel = document.querySelector('[data-bridge-health]');
+    if (!panel) return;
+    const status = panel.querySelector('[data-bridge-status]');
+    const body = panel.querySelector('[data-bridge-health-body]');
+    const connectButtons = panel.querySelectorAll('[data-bridge-connect]');
+    if (!status || !body) return;
+
+    if (bridgeState.status === 'connected') {
+      const payload = bridgeState.payload || {};
+      const capabilities = Array.isArray(payload.capabilities) ? payload.capabilities : [];
+      status.textContent = 'Connected';
+      status.className = 'bridge-status-pill is-connected';
+      body.innerHTML = `<div class="bridge-device-row"><div><strong>PocketPort Core is reachable</strong><span>Android / ${escapeHtml(payload.arch || 'unknown')} · API ${escapeHtml(payload.api || 'unknown')} · v${escapeHtml(payload.version || 'unknown')}</span></div><span class="bridge-dot"></span></div><div class="bridge-capabilities">${capabilities.length ? capabilities.map(cap => `<span>${escapeHtml(cap)}</span>`).join('') : '<span>bridge</span>'}</div>`;
+      connectButtons.forEach(button => { button.innerHTML = 'Refresh status <span class="button-arrow">↗</span>'; });
+      return;
+    }
+
+    if (bridgeState.status === 'failed') {
+      status.textContent = 'Not reachable';
+      status.className = 'bridge-status-pill is-failed';
+      body.innerHTML = `<div class="bridge-onboarding-step"><span>1</span><div><strong>Open Termux and start PocketPort</strong><code>pocketport serve</code></div></div><div class="bridge-onboarding-step"><span>2</span><div><strong>Come back and retry</strong><small>Last check: ${escapeHtml(bridgeState.reason || 'unreachable')}.</small></div></div>`;
+      connectButtons.forEach(button => { button.innerHTML = 'Retry connection <span class="button-arrow">↗</span>'; });
+      return;
+    }
+
+    status.textContent = 'Not checked';
+    status.className = 'bridge-status-pill';
+  }
+
   function renderBridgeCard() {
     ensureStyles();
     const resultView = document.querySelector('.result-view');
@@ -148,7 +179,7 @@
 
     if (bridgeState.status === 'failed') {
       card.className = 'bridge-card bridge-error';
-      card.innerHTML = `<div><strong><span class="bridge-dot"></span>Phone bridge not reachable</strong><span>Start <code>pocketport serve</code> in Termux, then retry.</span></div><button class="bridge-connect" type="button" data-bridge-connect>Retry</button>`;
+      card.innerHTML = `<div><strong><span class="bridge-dot"></span>Phone bridge not reachable</strong><span>Start <code>pocketport serve</code> in Termux, then retry.</span></div><div class="bridge-card-actions"><button class="bridge-connect" type="button" data-open-termux data-command="pocketport serve">Open Termux</button><button class="bridge-connect" type="button" data-bridge-connect>Retry</button></div>`;
       return;
     }
 
@@ -156,23 +187,28 @@
     card.innerHTML = `<div><strong>Connect this phone</strong><span>Allow PocketPort to check the local Termux bridge.</span></div><button class="bridge-connect" type="button" data-bridge-connect>Connect</button>`;
   }
 
+  function renderBridgeSurfaces() {
+    renderBridgeCard();
+    renderBridgeHealthPanel();
+  }
+
   async function connect() {
     if (probing) return;
     probing = true;
-    const button = document.querySelector('[data-bridge-connect]');
-    if (button) button.textContent = 'Checking…';
+    document.querySelectorAll('[data-bridge-connect]').forEach(button => { button.textContent = 'Checking…'; });
     const result = await detectLocalBridge();
     bridgeState = result.detected
       ? { status: 'connected', payload: result.payload, url: result.url }
       : { status: 'failed', reason: result.reason };
     probing = false;
-    renderBridgeCard();
+    renderBridgeSurfaces();
   }
 
   async function maybeOfferBridge() {
-    if (!document.querySelector('.result-view')) return;
+    const hasSurface = document.querySelector('.result-view') || document.querySelector('[data-bridge-health]');
+    if (!hasSurface) return;
     if (bridgeState.status === 'connected' || bridgeState.status === 'failed') {
-      renderBridgeCard();
+      renderBridgeSurfaces();
       return;
     }
 
@@ -181,7 +217,7 @@
       await connect();
       return;
     }
-    renderBridgeCard();
+    renderBridgeSurfaces();
   }
 
   function repoUrlFromRoute() {

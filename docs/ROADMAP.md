@@ -60,10 +60,10 @@ The web UI should become a control surface for PocketPort Core already running i
 - [x] localhost bridge
 - [x] local execution plan
 - [x] local workspace preparation
-- [ ] clearer bridge onboarding
+- [x] clearer bridge onboarding
 - [x] one-tap copy of install / run commands
 - [x] Android deep-link / intent handoff where practical
-- [ ] explicit bridge health and capability panel
+- [x] explicit bridge health and capability panel
 
 ## 5. PocketPort APK
 
