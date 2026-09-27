@@ -72,7 +72,7 @@ def _run_command_with_forwarded_args(command: str) -> str:
         tokens = []
 
     needs_separator = False
-    if len(tokens) >= 2 and tokens[0] in {"npm", "pnpm"}:
+    if len(tokens) >= 2 and tokens[0] == "npm":
         needs_separator = tokens[1] == "run" or tokens[1] in {"start", "test"}
     elif len(tokens) >= 2 and tokens[0] == "cargo" and tokens[1] == "run":
         needs_separator = True
@@ -81,7 +81,9 @@ def _run_command_with_forwarded_args(command: str) -> str:
     return f'{command}{separator} "$@"'
 
 
-def _render_install_commands(plan: ExecutionPlan, *, sharp_compat: bool = False) -> str:
+def _render_install_commands(
+    plan: ExecutionPlan, *, sharp_compat: bool = False, lefthook_compat: bool = False
+) -> str:
     commands: list[str] = []
     sharp_setup = [
         'echo "[PocketPort] sharp detected; enabling Termux libvips source build"',
@@ -99,14 +101,20 @@ def _render_install_commands(plan: ExecutionPlan, *, sharp_compat: bool = False)
         if sharp_compat and not inserted and is_node_install:
             commands.extend(sharp_setup)
             inserted = True
+        if lefthook_compat and is_node_install:
+            command = f"GITHUB_ACTIONS=true {command}"
         commands.append(command)
     if sharp_compat and not inserted:
         commands = sharp_setup + commands
     return "\n".join(commands)
 
 
-def render_install_script(plan: ExecutionPlan, *, sharp_compat: bool = False) -> str:
-    install = _render_install_commands(plan, sharp_compat=sharp_compat)
+def render_install_script(
+    plan: ExecutionPlan, *, sharp_compat: bool = False, lefthook_compat: bool = False
+) -> str:
+    install = _render_install_commands(
+        plan, sharp_compat=sharp_compat, lefthook_compat=lefthook_compat
+    )
     install_cd = _relative_cd(plan.install_directory)
     next_steps: list[str] = []
     if plan.run:
@@ -233,10 +241,15 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
         plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
         components = assess_components(root, report.findings)
         sharp_compat = _repository_has_node_dependency(root, "sharp")
+        lefthook_compat = _repository_has_node_dependency(root, "lefthook")
         if sharp_compat:
             if "sharp-libvips" not in plan.compatibility:
                 plan.compatibility.append("sharp-libvips")
             plan.notes.append("Sharp detected; prepared install will build it against Termux libvips when Android has no prebuilt binary.")
+        if lefthook_compat:
+            if "lefthook-android-skip" not in plan.compatibility:
+                plan.compatibility.append("lefthook-android-skip")
+            plan.notes.append("Lefthook detected; Node dependency install runs with GitHub Actions mode so unsupported Android Git hooks are skipped.")
 
         metadata = root / ".pocketport"
         metadata.mkdir(parents=True, exist_ok=True)
@@ -257,7 +270,14 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
         (metadata / "execution-plan.json").write_text(json.dumps(plan.to_dict(), indent=2), "utf-8")
 
         installer = root / "termux-install.sh"
-        installer.write_text(render_install_script(plan, sharp_compat=sharp_compat), "utf-8")
+        installer.write_text(
+            render_install_script(
+                plan,
+                sharp_compat=sharp_compat,
+                lefthook_compat=lefthook_compat,
+            ),
+            "utf-8",
+        )
         installer.chmod(0o755)
 
         runner_path: Path | None = None

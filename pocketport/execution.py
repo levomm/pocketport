@@ -262,6 +262,23 @@ def _compatibility_actions(report: ScanReport, component: ExecutionComponent) ->
     return compatibility, notes
 
 
+def _hybrid_requires_proot(report: ScanReport, component: ExecutionComponent) -> bool:
+    if report.strategy != "hybrid" and component.strategy != "hybrid":
+        return False
+
+    # In monorepos the selected CLI can look native by itself while the
+    # workspace it installs from depends on native runtime packages elsewhere.
+    # DeepSeek Harness is a concrete example: apps/cli is the entry surface,
+    # but its runtime reaches workspace-native system packages that stock
+    # Termux cannot satisfy.
+    component_findings = _component_findings(report, component)
+    findings = component_findings if component.strategy == "hybrid" and component_findings else report.findings
+    return any(
+        finding.kind in {"node-native", "python-native"} and finding.scope == "runtime"
+        for finding in findings
+    )
+
+
 def _proot_install_commands() -> list[str]:
     return ["pkg update -y", "pkg install -y proot-distro git", "proot-distro install ubuntu:24.04"]
 
@@ -314,7 +331,11 @@ def build_execution_plan(report: ScanReport, root: Path) -> ExecutionPlan:
         )
 
     compatibility, notes = _compatibility_actions(report, component)
-    if component.strategy == "proot":
+    if component.strategy == "proot" or _hybrid_requires_proot(report, component):
+        if "proot" not in compatibility:
+            compatibility.append("proot")
+        if report.strategy == "hybrid" or component.strategy == "hybrid":
+            notes.append("Runtime native dependencies plus hybrid compatibility signals make direct Termux execution unreliable; PocketPort routes this component through PRoot.")
         return ExecutionPlan(
             status="fallback", target={"platform": "android", "termux": True, "arch": "aarch64"},
             component=component, method="proot", install_directory=".", working_directory=component.path,

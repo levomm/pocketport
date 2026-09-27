@@ -121,3 +121,83 @@ def test_proot_plan_stays_explicitly_fallback(tmp_path: Path) -> None:
     assert plan.run == []
     assert "proot" in plan.compatibility
     assert "proot-distro install ubuntu:24.04" in plan.install
+
+
+def test_hybrid_runtime_native_dependency_routes_to_proot(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name":"demo","bin":"./cli.js","dependencies":{"node-pty":"1.0.0"}}',
+        "utf-8",
+    )
+    (tmp_path / "cli.js").write_text("console.log('ok')\n", "utf-8")
+
+    report = ScanReport(
+        path=str(tmp_path),
+        stack=["node"],
+        score=42,
+        strategy="hybrid",
+        findings=[
+            __import__("pocketport.scanner", fromlist=["Finding"]).Finding(
+                "medium",
+                "node-native",
+                "node-pty: native PTY addon",
+                "package.json",
+                "runtime",
+            )
+        ],
+    )
+
+    plan = build_execution_plan(report, tmp_path)
+
+    assert plan.status == "fallback"
+    assert plan.method == "proot"
+    assert plan.run == []
+    assert "proot" in plan.compatibility
+    assert "proot-distro install ubuntu:24.04" in plan.install
+
+
+def test_hybrid_monorepo_native_runtime_routes_selected_cli_to_proot(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name":"workspace","private":true,"packageManager":"pnpm@11.7.0"}',
+        "utf-8",
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", "utf-8")
+
+    cli = tmp_path / "apps" / "cli"
+    cli.mkdir(parents=True)
+    (cli / "package.json").write_text(
+        '{"name":"@demo/dsh","bin":{"dsh":"src/bin.js"}}',
+        "utf-8",
+    )
+    (cli / "src").mkdir()
+    (cli / "src" / "bin.js").write_text("console.log('ok')\n", "utf-8")
+
+    native = tmp_path / "packages" / "native"
+    native.mkdir(parents=True)
+    (native / "package.json").write_text('{"name":"@demo/native"}', "utf-8")
+
+    from pocketport.scanner import Finding
+
+    report = ScanReport(
+        path=str(tmp_path),
+        stack=["node"],
+        score=40,
+        strategy="hybrid",
+        findings=[
+            Finding(
+                "medium",
+                "node-native",
+                "native runtime package unavailable in stock Termux",
+                "packages/native/package.json",
+                "runtime",
+            )
+        ],
+    )
+
+    plan = build_execution_plan(report, tmp_path)
+
+    assert plan.component.path == "apps/cli"
+    assert plan.component.strategy == "native"
+    assert plan.status == "fallback"
+    assert plan.method == "proot"
+    assert plan.run == []
+    assert "proot" in plan.compatibility

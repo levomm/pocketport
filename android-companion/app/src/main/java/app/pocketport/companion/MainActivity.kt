@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -57,6 +58,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 
 private val Bg = Color(0xFF070A09)
 private val Panel = Color(0xFF0D1210)
@@ -111,7 +113,17 @@ private data class PlanState(
     val run: List<String>,
 )
 
-private data class PreparedState(val repoRoot: String, val command: String)
+private data class PreparedState(
+    val repoRoot: String,
+    val command: String,
+    val runnerAvailable: Boolean,
+)
+
+private enum class ActiveJob {
+    NONE,
+    SCAN,
+    PREPARE,
+}
 
 @Composable
 private fun PocketPortApp() {
@@ -125,6 +137,8 @@ private fun PocketPortApp() {
     var plan by remember { mutableStateOf<PlanState?>(null) }
     var prepared by remember { mutableStateOf<PreparedState?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var activeJob by remember { mutableStateOf(ActiveJob.NONE) }
+    var elapsedSeconds by remember { mutableStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
 
     fun checkBridge() {
@@ -158,6 +172,8 @@ private fun PocketPortApp() {
             return
         }
         busy = true
+        activeJob = ActiveJob.SCAN
+        elapsedSeconds = 0
         plan = null
         prepared = null
         message = "Building local execution plan..."
@@ -165,6 +181,7 @@ private fun PocketPortApp() {
             val result = client.plan(repository)
             main.post {
                 busy = false
+                activeJob = ActiveJob.NONE
                 result.fold(
                     onSuccess = { json ->
                         val execution = json.optJSONObject("execution_plan") ?: JSONObject()
@@ -192,22 +209,21 @@ private fun PocketPortApp() {
     fun prepareRepository() {
         val repository = plan?.repository ?: normalizeRepository(repoInput) ?: return
         busy = true
+        activeJob = ActiveJob.PREPARE
+        elapsedSeconds = 0
         message = "Preparing PocketPort workspace..."
         executor.execute {
             val result = client.prepare(repository)
             main.post {
                 busy = false
+                activeJob = ActiveJob.NONE
                 result.fold(
                     onSuccess = { json ->
                         val root = json.optString("repo_root")
                         val hasRunner = !json.isNull("runner") && json.optString("runner").isNotBlank()
                         val quoted = shellQuote(root)
-                        val command = if (hasRunner) {
-                            "cd " + quoted + " && ./termux-install.sh && ./termux-run.sh"
-                        } else {
-                            "cd " + quoted + " && ./termux-install.sh"
-                        }
-                        prepared = PreparedState(root, command)
+                        val command = "cd " + quoted + " && ./termux-install.sh"
+                        prepared = PreparedState(root, command, hasRunner)
                         message = "Workspace prepared. Nothing has executed yet."
                     },
                     onFailure = { message = it.message ?: "Workspace preparation failed." },
@@ -217,10 +233,24 @@ private fun PocketPortApp() {
     }
 
     LaunchedEffect(Unit) { checkBridge() }
+    LaunchedEffect(activeJob) {
+        if (activeJob != ActiveJob.NONE) {
+            elapsedSeconds = 0
+            val current = activeJob
+            while (activeJob == current) {
+                delay(1000)
+                if (activeJob == current) elapsedSeconds += 1
+            }
+        }
+    }
     DisposableEffect(Unit) { onDispose { executor.shutdownNow() } }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         BrandHeader()
@@ -264,12 +294,28 @@ private fun PocketPortApp() {
                 disabledContentColor = Muted,
             ),
         ) {
-            Text(if (busy) "Working..." else "Scan on this phone", fontWeight = FontWeight.Bold)
+            val label = when (activeJob) {
+                ActiveJob.SCAN -> "Scanning..."
+                ActiveJob.PREPARE -> "Preparing..."
+                ActiveJob.NONE -> "Scan on this phone"
+            }
+            Text(label, fontWeight = FontWeight.Bold)
         }
+
+        if (activeJob != ActiveJob.NONE) {
+            OperationProgressCard(activeJob, elapsedSeconds)
+        }
+
+        FlowStatusCard(
+            bridgeConnected = bridge.connected,
+            planReady = plan != null,
+            workspaceReady = prepared != null,
+            activeJob = activeJob,
+        )
 
         if (!bridge.connected) {
             Text(
-                "Start pocketport serve in Termux first. The APK only talks to 127.0.0.1:33343.",
+                "Open Termux, run pocketport serve, then leave Termux open in the background. Closing it disconnects the bridge.",
                 color = Warning,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
@@ -366,16 +412,24 @@ private fun BridgeCard(state: BridgeState, onCheck: () -> Unit, onOpenTermux: ()
                 }
             } else {
                 Text(
-                    state.error ?: "PocketPort Core runs locally in Termux.",
+                    "1. Open Termux\n2. Run: pocketport serve\n3. Come back and tap Check bridge",
                     color = Muted,
                     fontSize = 11.sp,
-                    lineHeight = 16.sp,
+                    lineHeight = 17.sp,
                 )
+                CommandLine("pocketport serve")
             }
+
+            Text(
+                "Keep Termux open with pocketport serve running in the background. If you close Termux, the bridge disconnects.",
+                color = Warning,
+                fontSize = 10.sp,
+                lineHeight = 15.sp,
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onOpenTermux, modifier = Modifier.weight(1f)) {
-                    Text("Open Termux", fontSize = 11.sp)
+                    Text("Copy + open Termux", fontSize = 10.sp)
                 }
                 Button(
                     onClick = onCheck,
@@ -384,6 +438,244 @@ private fun BridgeCard(state: BridgeState, onCheck: () -> Unit, onOpenTermux: ()
                     colors = ButtonDefaults.buttonColors(containerColor = Panel2, contentColor = TextMain),
                 ) {
                     Text(if (state.checking) "Checking..." else "Check bridge", fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun OperationProgressCard(job: ActiveJob, elapsed: Int) {
+    var expanded by remember(job) { mutableStateOf(true) }
+    val timeout = if (job == ActiveJob.SCAN) 90 else 240
+    val remaining = (timeout - elapsed).coerceAtLeast(0)
+    val progress = (elapsed.toFloat() / timeout.toFloat()).coerceIn(0f, 0.98f)
+    val stages = if (job == ActiveJob.SCAN) {
+        listOf(
+            "Contact bridge",
+            "Inspect repository",
+            "Build execution plan",
+        )
+    } else {
+        listOf(
+            "Create workspace",
+            "Apply compatibility fixes",
+            "Write install / run handoff",
+        )
+    }
+    val stageIndex = if (job == ActiveJob.SCAN) {
+        when {
+            elapsed < 4 -> 0
+            elapsed < 20 -> 1
+            else -> 2
+        }
+    } else {
+        when {
+            elapsed < 10 -> 0
+            elapsed < 55 -> 1
+            else -> 2
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0A100C)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF21402D)),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (job == ActiveJob.SCAN) "SCANNING REPOSITORY" else "PREPARING WORKSPACE",
+                        color = Accent,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                    )
+                    Text(
+                        stages[stageIndex],
+                        color = TextMain,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                OutlinedButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Less" else "Details", fontSize = 9.sp)
+                }
+            }
+
+            SegmentedPulseRail(progress = progress, stageIndex = stageIndex)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    elapsed.toString() + "s elapsed",
+                    color = Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                )
+                Text(
+                    "~" + remaining + "s timeout window left",
+                    color = Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                )
+            }
+
+            if (expanded) {
+                stages.forEachIndexed { index, label ->
+                    val state = when {
+                        index < stageIndex -> "DONE"
+                        index == stageIndex -> "NOW"
+                        else -> "NEXT"
+                    }
+                    val color = if (index <= stageIndex) Accent else Muted
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text((index + 1).toString() + ". " + label, color = color, fontSize = 10.sp)
+                        Text(state, color = color, fontFamily = FontFamily.Monospace, fontSize = 8.sp)
+                    }
+                }
+                Text(
+                    "The timer is a live timeout/ETA indicator, not a fake exact build percentage.",
+                    color = Muted,
+                    fontSize = 9.sp,
+                    lineHeight = 14.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SegmentedPulseRail(progress: Float, stageIndex: Int) {
+    val segments = 12
+    val activeSegments = (progress * segments).toInt().coerceIn(0, segments)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        repeat(segments) { index ->
+            val filled = index < activeSegments
+            val pulse = index == activeSegments.coerceAtMost(segments - 1)
+            val segmentColor = when {
+                filled -> Accent
+                pulse -> Warning
+                else -> Color(0xFF18231D)
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(if (pulse) 9.dp else 6.dp)
+                    .background(segmentColor, RoundedCornerShape(999.dp))
+            )
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(3) { index ->
+            val done = index < stageIndex
+            val active = index == stageIndex
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .size(if (active) 16.dp else 12.dp)
+                        .background(
+                            when {
+                                done -> Accent
+                                active -> Warning
+                                else -> Color(0xFF26362D)
+                            },
+                            CircleShape,
+                        )
+                )
+                Text(
+                    when (index) {
+                        0 -> "START"
+                        1 -> "WORK"
+                        else -> "PLAN"
+                    },
+                    color = if (done || active) TextMain else Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 7.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlowStatusCard(
+    bridgeConnected: Boolean,
+    planReady: Boolean,
+    workspaceReady: Boolean,
+    activeJob: ActiveJob,
+) {
+    val rows = listOf(
+        Triple("Bridge", bridgeConnected, activeJob == ActiveJob.NONE && !bridgeConnected),
+        Triple("Scan", planReady, activeJob == ActiveJob.SCAN),
+        Triple("Plan", planReady, false),
+        Triple("Prepare", workspaceReady, activeJob == ActiveJob.PREPARE),
+        Triple("Handoff", workspaceReady, false),
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("LIVE FLOW", color = Muted, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            rows.forEach { (label, done, active) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    when {
+                                        done -> Accent
+                                        active -> Warning
+                                        else -> Color(0xFF334039)
+                                    },
+                                    CircleShape,
+                                )
+                        )
+                        Text("  " + label, color = if (done || active) TextMain else Muted, fontSize = 10.sp)
+                    }
+                    Text(
+                        when {
+                            done -> "DONE"
+                            active -> "RUNNING"
+                            else -> "WAITING"
+                        },
+                        color = when {
+                            done -> Accent
+                            active -> Warning
+                            else -> Muted
+                        },
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 8.sp,
+                    )
                 }
             }
         }
@@ -467,10 +759,19 @@ private fun PreparedCard(state: PreparedState, onRun: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
             ) {
-                Text("Copy command & open Termux", fontWeight = FontWeight.Bold)
+                Text("Copy install & open Termux", fontWeight = FontWeight.Bold)
+            }
+            if (state.runnerAvailable) {
+                Text(
+                    "Runner is prepared for the next step. Some tools require arguments or a profile.",
+                    color = Muted,
+                    fontSize = 10.sp,
+                    lineHeight = 15.sp,
+                )
+                CommandLine("./termux-run.sh [arguments if required]")
             }
             Text(
-                "The APK never silently executes repository code. Paste the copied command in Termux and press Enter.",
+                "The APK installs dependencies only. It never auto-starts repository code. Paste the copied command in Termux and press Enter.",
                 color = Muted,
                 fontSize = 10.sp,
                 lineHeight = 15.sp,
@@ -490,7 +791,12 @@ private class PocketPortBridgeClient(private val baseUrl: String = "http://127.0
         val connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 2500
-            readTimeout = if (path == "/health") 2500 else 60000
+            readTimeout = when (path) {
+                "/health" -> 2500
+                "/api/plan" -> 90000
+                "/api/prepare" -> 240000
+                else -> 60000
+            }
             useCaches = false
             setRequestProperty("Accept", "application/json")
             if (body != null) {
