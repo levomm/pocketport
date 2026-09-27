@@ -22,3 +22,5 @@ The APK never runs third-party repository code silently.
 - JDK 17
 - compileSdk / targetSdk 37
 - Compose BOM 2026.09.00
+
+Reference compatibility proof remains in the root README and experiments directory; the companion consumes PocketPort Core output rather than reimplementing scanner logic.
