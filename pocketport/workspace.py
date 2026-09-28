@@ -179,6 +179,9 @@ fi
 
 {install_cd}{install}
 
+mkdir -p "$ROOT/.pocketport"
+touch "$ROOT/.pocketport/install-complete"
+
 echo
 echo "[PocketPort] install phase complete"
 echo "Next:"
@@ -205,6 +208,15 @@ if [ -n "${{PREFIX:-}}" ] && [[ "${{PREFIX}}" == *"com.termux"* ]]; then
   export PATH="${{PREFIX}}/bin:${{PATH:-}}"
   hash -r
   export POCKETPORT_TERMUX_TOOLCHAIN=1
+fi
+
+if [ ! -f "$ROOT/.pocketport/install-complete" ]; then
+  echo "[PocketPort] install marker missing; running installer before start"
+  if [ ! -x "$ROOT/termux-install.sh" ]; then
+    echo "[PocketPort] installer is missing or not executable." >&2
+    exit 5
+  fi
+  "$ROOT/termux-install.sh"
 fi
 
 {working_cd}{setup_block}if [ "$#" -gt 0 ]; then

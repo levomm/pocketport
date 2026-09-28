@@ -169,3 +169,11 @@ def test_no_runner_is_generated_without_trustworthy_run_command() -> None:
     plan = _plan()
     plan.run = []
     assert render_run_script(plan) is None
+
+
+def test_run_script_repairs_missing_install_before_launch() -> None:
+    script = render_run_script(_plan())
+    assert script is not None
+    assert '.pocketport/install-complete' in script
+    assert 'running installer before start' in script
+    assert '"$ROOT/termux-install.sh"' in script
