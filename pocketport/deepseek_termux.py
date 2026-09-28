@@ -83,6 +83,46 @@ if first != wanted:
     open(path, "w", encoding="utf-8").write(wanted + "\n" + rest)
 PY
 
+RESOLVER_JS="$DSH_LIB/node_modules/@deepseek-ai/dsh-app-boot/lib/profile-resolution/resolver.js"
+if [ ! -f "$RESOLVER_JS" ]; then
+  echo "[PocketPort] DeepSeek profile resolver not found; published package layout changed." >&2
+  exit 6
+fi
+
+echo "[PocketPort] patching DeepSeek profile resolver for Android Node internals"
+python3 - "$RESOLVER_JS" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+src = path.read_text("utf-8")
+marker = "pocketport-termux-node-internals"
+if marker not in src:
+    anchors = (
+        "const addon = require('node-addon-require-builtin');",
+        'const addon = require("node-addon-require-builtin");',
+        "const addon = require('node-addon-require-builtin')",
+        'const addon = require("node-addon-require-builtin")',
+    )
+    anchor = next((candidate for candidate in anchors if candidate in src), None)
+    if anchor is None:
+        raise SystemExit("PocketPort: node-addon-require-builtin resolver anchor changed")
+    if "addon.requireBuiltin(" not in src:
+        raise SystemExit("PocketPort: DeepSeek resolver no longer uses addon.requireBuiltin")
+    src = src.replace(
+        anchor,
+        f"/* {marker}: Termux launches dsh with --expose-internals, so load Node internals directly. */",
+        1,
+    )
+    src = src.replace("addon.requireBuiltin(", "require(")
+    path.write_text(src, "utf-8")
+PY
+
+if ! "$NODE_BIN" --expose-internals -e "for (const m of ['internal/modules/esm/loader','internal/modules/cjs/loader','internal/modules/helpers','internal/modules/esm/utils','internal/modules/esm/resolve']) require(m)" >/dev/null 2>&1; then
+  echo "[PocketPort] Node internal-module compatibility probe failed." >&2
+  exit 7
+fi
+
 python3 - "$DSH_LIB" <<'PY'
 from pathlib import Path
 import sys
@@ -158,7 +198,7 @@ if ! dsh --version >/dev/null 2>&1; then
   exit 9
 fi
 mkdir -p "$HOME/.pocketport"
-touch "$HOME/.pocketport/deepseek-harness-ready"
+touch "$HOME/.pocketport/deepseek-harness-ready-v2"
 echo "[PocketPort] DeepSeek Harness Android compatibility ready"
 echo "[PocketPort] start with: dsh web --no-open"
 '''
