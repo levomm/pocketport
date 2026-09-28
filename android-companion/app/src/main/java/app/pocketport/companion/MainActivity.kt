@@ -37,6 +37,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -235,6 +236,31 @@ private fun PocketPortLaunchIntro(onDone: () -> Unit) {
                 fontFamily = FontFamily.Monospace,
                 fontSize = 9.sp,
             )
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 64.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(7) { index ->
+                val active = p * 7f > index
+                Box(
+                    modifier = Modifier
+                        .size(width = if (index == 3) 28.dp else 22.dp, height = if (index == 3) 7.dp else 5.dp)
+                        .graphicsLayer {
+                            rotationZ = if (index % 2 == 0) -8f else 8f
+                            scaleX = if (active) 1f else 0.82f
+                            alpha = if (active) 0.95f else 0.25f
+                        }
+                        .background(
+                            if (active) Accent else Color(0xFF203128),
+                            RoundedCornerShape(999.dp),
+                        )
+                )
+            }
         }
 
         Text(
@@ -443,7 +469,12 @@ private fun PocketPortApp() {
                 ActiveJob.PREPARE -> "Preparing..."
                 ActiveJob.NONE -> "Scan repository"
             }
-            Text(label, fontWeight = FontWeight.Bold)
+            Icon(
+                painter = painterResource(id = R.drawable.ic_scan),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text("  " + label, fontWeight = FontWeight.Bold)
         }
 
         CompactBridgeStatus(
@@ -595,7 +626,12 @@ private fun CompactBridgeStatus(state: BridgeState, onCheck: () -> Unit) {
             )
         }
         OutlinedButton(onClick = onCheck, enabled = !state.checking) {
-            Text(if (state.checking) "..." else "Check", fontSize = 9.sp)
+            Icon(
+                painter = painterResource(id = R.drawable.ic_connect),
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+            )
+            Text(if (state.checking) "  ..." else "  Check", fontSize = 9.sp)
         }
     }
 }
@@ -632,10 +668,20 @@ private fun ResultActions(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onToggleDetails, modifier = Modifier.weight(1f)) {
-                Text(if (showDetails) "Hide fixes" else "View fixes", fontSize = 10.sp)
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_fixes),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(if (showDetails) "  Hide fixes" else "  View fixes", fontSize = 10.sp)
             }
             OutlinedButton(onClick = onOpenGitHub, modifier = Modifier.weight(1f)) {
-                Text("Open on GitHub ↗", fontSize = 10.sp)
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_github),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text("  GitHub ↗", fontSize = 10.sp)
             }
         }
         Button(
@@ -644,7 +690,12 @@ private fun ResultActions(
             modifier = Modifier.fillMaxWidth().height(54.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
         ) {
-            Text("Use on this phone", fontWeight = FontWeight.Bold)
+            Icon(
+                painter = painterResource(id = R.drawable.ic_phone),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text("  Use on this phone", fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -723,7 +774,12 @@ private fun BridgeCard(state: BridgeState, onCheck: () -> Unit, onOpenTermux: ()
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onOpenTermux, modifier = Modifier.weight(1f)) {
-                    Text("Copy + open Termux", fontSize = 10.sp)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_termux),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text("  Open Termux", fontSize = 10.sp)
                 }
                 Button(
                     onClick = onCheck,
@@ -731,7 +787,12 @@ private fun BridgeCard(state: BridgeState, onCheck: () -> Unit, onOpenTermux: ()
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Panel2, contentColor = TextMain),
                 ) {
-                    Text(if (state.checking) "Checking..." else "Check bridge", fontSize = 11.sp)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_connect),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(if (state.checking) "  Checking..." else "  Check bridge", fontSize = 11.sp)
                 }
             }
         }
@@ -1057,7 +1118,12 @@ private fun PreparedCard(
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
             ) {
-                Text("02  Install in Termux", fontWeight = FontWeight.Bold)
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_termux),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text("  02  Install in Termux", fontWeight = FontWeight.Bold)
             }
 
             Text("03  START TOOL", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
@@ -1074,7 +1140,12 @@ private fun PreparedCard(
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
                 ) {
-                    Text("03  Start in Termux", fontWeight = FontWeight.Bold)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_termux),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text("  03  Start in Termux", fontWeight = FontWeight.Bold)
                 }
             } else {
                 Text(
