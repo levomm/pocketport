@@ -28,7 +28,11 @@ def test_deepseek_harness_uses_published_android_recipe(tmp_path: Path) -> None:
 
     assert plan.method == "published-package"
     assert plan.status == "ready"
-    assert "npm install -g @deepseek-ai/dsh@0.1.7-rc.2" in plan.install
+    rendered = "\n".join(plan.install)
+    assert "@deepseek-ai/dsh@0.1.7-rc.2" in rendered
+    assert "SHARP_FORCE_GLOBAL_LIBVIPS" in rendered
+    assert "--expose-internals" in rendered
+    assert "deepseek-termux-compat" in plan.compatibility
     assert plan.run == ["pocketport run -- dsh web --no-open"]
     assert "validated-recipe" in plan.compatibility
     assert not any("pnpm install" in command for command in plan.install)
