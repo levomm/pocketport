@@ -201,8 +201,8 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cd "$ROOT"
 
-if [ -n "${PREFIX:-}" ] && [[ "${PREFIX}" == *"com.termux"* ]]; then
-  export PATH="${PREFIX}/bin:${PATH:-}"
+if [ -n "${{PREFIX:-}}" ] && [[ "${{PREFIX}}" == *"com.termux"* ]]; then
+  export PATH="${{PREFIX}}/bin:${{PATH:-}}"
   hash -r
   export POCKETPORT_TERMUX_TOOLCHAIN=1
 fi
