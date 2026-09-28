@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 from .components import assess_components
 from .entrypoints import enrich_workspace_entrypoint
 from .execution import build_execution_plan
+from .recipes import apply_repository_recipe
 from .semantics import semantic_scan
 
 
@@ -198,6 +199,7 @@ def scan_public_github(repository: str) -> dict:
         if components:
             payload["components"] = [asdict(component) for component in components]
         plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
+        plan = apply_repository_recipe(repo.slug, plan, root)
         payload["execution_plan"] = plan.to_dict()
 
         payload["path"] = repo.slug

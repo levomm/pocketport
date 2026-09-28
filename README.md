@@ -1,30 +1,59 @@
 <p align="center">
-  <img src="./assets/pocketport-logo.svg" alt="PocketPort" width="760">
+  <img src="./assets/pocketport-logo.svg" alt="PocketPort" width="720">
 </p>
 
 <p align="center">
-  <strong>Run more GitHub projects on the computer already in your pocket.</strong>
+  <strong>Run more GitHub tools on Android.</strong><br>
+  Scan a repository, choose the safest Termux path, prepare the workspace, and hand off the exact command to your phone.
+</p>
+
+<p align="center">
+  <a href="https://pocketport.vercel.app/">Web scanner</a> ·
+  <a href="./docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="./experiments/deepseek-harness.md">DeepSeek Harness proof</a> ·
+  <a href="./docs/LAUNCH.md">Launch kit</a>
+</p>
+
+<p align="center">
+  <img src="./assets/pocketport-github-showcase.jpg" alt="PocketPort on Android" width="760">
 </p>
 
 <p align="center">
   <a href="https://github.com/levomm/pocketport/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/levomm/pocketport/actions/workflows/tests.yml/badge.svg"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB">
   <img alt="Android + Termux" src="https://img.shields.io/badge/Android-Termux-19c37d">
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-8affc1">
-  <img alt="PocketPort 0.3.8" src="https://img.shields.io/badge/PocketPort-0.3.8-28f58d">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB">
+  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-8affc1">
 </p>
 
-PocketPort scans desktop-first Linux projects for Android / Termux incompatibilities, chooses the least painful execution path, and applies only conservative patches when the fix is unambiguous.
+## Why PocketPort
 
-It does **not** pretend every Linux repository is magically Android-native.
+A lot of useful GitHub projects assume a desktop Linux machine. PocketPort checks those assumptions and tells you what can actually run on Android.
 
-## What it decides
+It chooses one of three paths:
 
-| Strategy | Meaning |
+| Path | What it means |
 | --- | --- |
 | **native** | Run directly in Termux |
-| **hybrid** | Patch safe assumptions and keep a PRoot fallback |
-| **proot** | Use a rootless Linux userland when desktop Linux assumptions are real |
+| **hybrid** | Apply conservative fixes and keep a PRoot fallback |
+| **proot** | Use a rootless Linux userland when desktop-Linux assumptions are real |
+
+PocketPort does **not** claim every repo magically works on Android. It scans first, patches only when the change is unambiguous, and keeps execution explicit.
+
+## Android flow
+
+**01 Scan repo → 02 Connect phone → 03 Run in Termux**
+
+The native Android companion talks to PocketPort Core on localhost. The APK is the control surface; Termux remains the execution environment.
+
+Current companion flow:
+
+- scan a GitHub repository
+- inspect compatibility and execution strategy
+- show fixes and plan details
+- prepare a local PocketPort workspace
+- open the repo on GitHub
+- copy the generated command
+- hand off to Termux with **Run in Termux**
 
 ## Quick start
 
@@ -34,140 +63,83 @@ pkg install -y git python
 git clone https://github.com/levomm/pocketport
 cd pocketport
 python -m pip install -e .
-```
-
-Check the phone:
-
-```bash
 pocketport doctor
 ```
 
-Scan a repository:
-
-```bash
-pocketport scan https://github.com/owner/repo
-pocketport scan https://github.com/owner/repo --json
-```
-
-Prepare and run a public GitHub repository:
-
-```bash
-pocketport run https://github.com/owner/repo
-```
-
-PocketPort prepares an isolated workspace, applies only conservative patches, builds the execution plan, and asks before executing third-party code in Termux.
-
-Prepare a local project:
-
-```bash
-pocketport prepare .
-```
-
-Preview patches before touching anything:
-
-```bash
-pocketport patch . --dry-run -v
-```
-
-## Reference proof: DeepSeek Harness
-
-PocketPort has been tested end-to-end against [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) on **Android 16 / aarch64 Termux**.
-
-Validated:
-
-- npm installation
-- Web UI startup
-- a real model / agent turn
-- shell execution
-- session persistence
-- native filesystem write + read
-- direct Termux execution with a narrow PocketPort runtime shim
-- no PRoot required for the tested flow
-
-Current limitation: the Harness `workspace-write` sandbox backend was not usable on the tested Android host, so Android-specific confinement / approval remains an active area.
-
-Full notes: [experiments/deepseek-harness.md](experiments/deepseek-harness.md)
-
-## What PocketPort scans
-
-- Node, Python, Rust and Go projects
-- Docker / Docker Compose assumptions
-- CUDA / NVIDIA dependencies
-- systemd / `systemctl`
-- glibc and distro package-manager assumptions
-- hard-coded `/usr/bin` and `/bin/bash`
-- x86-only assumptions
-- common native Node modules
-- common heavy / native Python dependencies
-
-## Conservative patching
-
-Current safe rewrites include:
-
-- desktop bash shebangs -> Termux bash
-- narrow `sudo` removal before known external commands
-- `xdg-open` -> `termux-open`
-- simple `apt`, `dnf`, `yum`, `apk` install/update commands -> `pkg`
-- common package-name translations
-- unambiguous npm script rewrites
-
-PocketPort leaves ambiguous shell forms, unknown commands, pipes, command substitutions and complex chained expressions untouched.
-
-> A patcher that confidently destroys working projects is not automation, it is vandalism with branding.
-
-Patch details are written to:
-
-```text
-.pocketport/patch-report.json
-```
-
-## One-command preparation
-
-```bash
-pocketport prepare .
-```
-
-This performs:
-
-1. scan
-2. safe patch
-3. rescan
-4. execution-plan generation
-5. `termux-install.sh` generation
-
-Generated artifacts include:
-
-```text
-.pocketport/report.json
-.pocketport/execution-plan.json
-termux-install.sh
-termux-run.sh   # when a trustworthy run command exists
-```
-
-## Local phone bridge
-
-PocketPort can expose a localhost-only bridge for the web UI and the planned APK:
+Start the phone bridge:
 
 ```bash
 pocketport serve
 ```
 
-The bridge can build local execution plans and prepare PocketPort-owned workspaces. When the bridge is connected, the web UI exposes **Run in Termux**: it prepares the repository locally, copies the exact generated install/run command, and opens Termux. The user still pastes and confirms the command in Termux, so the web page never silently executes shell code.
-
-The web UI does not invent compatibility results; PocketPort Core remains the source of truth.
-
-Web: https://pocketport.vercel.app/
-
-## GitHub release assets
-
-Pick the best release asset for the phone architecture:
+Scan and prepare:
 
 ```bash
-pocketport asset owner/repo
-pocketport asset owner/repo --tag v1.2.3
+pocketport scan https://github.com/owner/repo
+pocketport prepare .
 ```
 
-PocketPort prefers Android / Termux and matching `arm64` / `aarch64` artifacts, rejects foreign OS / architecture builds, and filters checksums and source archives.
+Or let PocketPort prepare an isolated workspace for a public repository:
+
+```bash
+pocketport run https://github.com/owner/repo
+```
+
+## DeepSeek Harness proof
+
+PocketPort has been tested end-to-end against [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) on **Android 16 / aarch64 Termux**.
+
+Validated in the tested flow:
+
+- installation
+- Web UI startup
+- real model / agent turn
+- shell execution
+- session persistence
+- filesystem write + read
+- direct Termux execution with a narrow PocketPort runtime shim
+- no PRoot required for the tested path
+
+Detailed notes: [experiments/deepseek-harness.md](experiments/deepseek-harness.md)
+
+## What it scans
+
+PocketPort looks for things that usually break desktop-first projects on Android:
+
+- Docker / Docker Compose assumptions
+- systemd / `systemctl`
+- distro package managers
+- hard-coded `/usr/bin` and `/bin/bash`
+- CUDA / NVIDIA dependencies
+- x86-only assumptions
+- native Node modules
+- native / heavy Python dependencies
+- runtime capability mismatches
+
+## Conservative patching
+
+Safe rewrites currently include:
+
+- desktop bash shebangs → Termux bash
+- narrow `sudo` removal before known external commands
+- `xdg-open` → `termux-open`
+- simple distro package install/update commands → `pkg`
+- common package-name translations
+- unambiguous npm script rewrites
+
+Ambiguous shell logic is left alone.
+
+> A patcher that confidently destroys working projects is not automation. It is vandalism with branding.
+
+## Generated files
+
+```text
+.pocketport/report.json
+.pocketport/execution-plan.json
+.pocketport/patch-report.json
+termux-install.sh
+termux-run.sh
+```
 
 ## Project map
 
@@ -185,35 +157,16 @@ scan -> semantics -> component analysis
             |
       execution plan
             |
-       Termux runtime
+       Android companion
+            |
+         Termux
 ```
 
-See [Architecture](docs/ARCHITECTURE.md) and [Roadmap](docs/ROADMAP.md).
+## Status
 
-## Current focus
+PocketPort is still early and moving quickly. The current focus is repo-aware execution, safer Android handoff, isolated prepared workspaces, compatibility proof, and a polished native companion.
 
-PocketPort 0.3.x is focused on:
-
-- repo-aware execution
-- isolated prepared workspaces
-- failure classification
-- runtime-aware scoring
-- safer Android approval / confinement
-- APK companion UI
-- public compatibility proof and reports
-
-## Non-goals
-
-PocketPort will not:
-
-- make CUDA software run on a phone GPU
-- emulate unavailable kernel features
-- silently rewrite complicated shell logic
-- claim a repository works when it has not actually been proven
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions, test repos, failure reports, and Android edge cases are useful.
 
 ## License
 
