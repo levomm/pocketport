@@ -269,8 +269,8 @@ private data class PlanState(
 
 private data class PreparedState(
     val repoRoot: String,
-    val command: String,
-    val runnerAvailable: Boolean,
+    val installCommand: String,
+    val runCommand: String?,
 )
 
 private enum class ActiveJob {
@@ -378,9 +378,10 @@ private fun PocketPortApp() {
                         val root = json.optString("repo_root")
                         val hasRunner = !json.isNull("runner") && json.optString("runner").isNotBlank()
                         val quoted = shellQuote(root)
-                        val command = "cd " + quoted + " && ./termux-install.sh"
-                        prepared = PreparedState(root, command, hasRunner)
-                        message = "Workspace prepared. Nothing has executed yet."
+                        val installCommand = "cd " + quoted + " && ./termux-install.sh"
+                        val runCommand = if (hasRunner) "cd " + quoted + " && ./termux-run.sh" else null
+                        prepared = PreparedState(root, installCommand, runCommand)
+                        message = "Workspace ready. Step 2: install. Step 3: start the tool."
                     },
                     onFailure = { message = it.message ?: "Workspace preparation failed." },
                 )
@@ -479,7 +480,11 @@ private fun PocketPortApp() {
         }
 
         prepared?.let { ready ->
-            PreparedCard(ready) { copyAndOpenTermux(context, ready.command) }
+            PreparedCard(
+                state = ready,
+                onInstall = { copyAndOpenTermux(context, ready.installCommand) },
+                onRun = { ready.runCommand?.let { copyAndOpenTermux(context, it) } },
+            )
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -1023,7 +1028,11 @@ private fun CommandLine(command: String) {
 }
 
 @Composable
-private fun PreparedCard(state: PreparedState, onRun: () -> Unit) {
+private fun PreparedCard(
+    state: PreparedState,
+    onInstall: () -> Unit,
+    onRun: () -> Unit,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0A140E)),
@@ -1031,28 +1040,53 @@ private fun PreparedCard(state: PreparedState, onRun: () -> Unit) {
         shape = RoundedCornerShape(14.dp),
     ) {
         Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("READY FOR HANDOFF", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            Text("READY ON THIS PHONE", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
             Text("Workspace prepared locally", color = TextMain, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text(state.repoRoot, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-            CommandLine(state.command)
+
+            Text("02  INSTALL / REPAIR", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            Text(
+                "Run this first. Wait until Termux returns to the prompt without an error.",
+                color = Muted,
+                fontSize = 10.sp,
+                lineHeight = 15.sp,
+            )
+            CommandLine(state.installCommand)
             Button(
-                onClick = onRun,
+                onClick = onInstall,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
             ) {
-                Text("Run in Termux", fontWeight = FontWeight.Bold)
+                Text("02  Install in Termux", fontWeight = FontWeight.Bold)
             }
-            if (state.runnerAvailable) {
+
+            Text("03  START TOOL", color = Accent, fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            if (state.runCommand != null) {
                 Text(
-                    "Runner is prepared for the next step. Some tools require arguments or a profile.",
+                    "After install succeeds, run this. PocketPort will start the detected Android-compatible entrypoint.",
                     color = Muted,
                     fontSize = 10.sp,
                     lineHeight = 15.sp,
                 )
-                CommandLine("./termux-run.sh [arguments if required]")
+                CommandLine(state.runCommand)
+                Button(
+                    onClick = onRun,
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF061009)),
+                ) {
+                    Text("03  Start in Termux", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Text(
+                    "PocketPort did not find a trustworthy launch command. Installation can finish, but automatic start is unavailable.",
+                    color = Warning,
+                    fontSize = 10.sp,
+                    lineHeight = 15.sp,
+                )
             }
+
             Text(
-                "The APK installs dependencies only. It never auto-starts repository code. Paste the copied command in Termux and press Enter.",
+                "Buttons copy the exact command and open Termux. Repository code is never started silently.",
                 color = Muted,
                 fontSize = 10.sp,
                 lineHeight = 15.sp,
