@@ -83,6 +83,8 @@ private val TextMain = Color(0xFFEDF4EF)
 private val Muted = Color(0xFF8D9B92)
 private val Accent = Color(0xFF72F59C)
 private val Warning = Color(0xFFD8B46F)
+private const val RequiredCoreVersion = "0.3.9"
+private const val CoreUpdateCommand = "pkill -f 'pocketport serve' 2>/dev/null || true; python -m pip install -U 'git+https://github.com/levomm/pocketport.git@main'; pocketport serve"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -273,6 +275,20 @@ private fun PocketPortLaunchIntro(onDone: () -> Unit) {
     }
 }
 
+private fun coreVersionAtLeast(version: String, required: String = RequiredCoreVersion): Boolean {
+    if (version == "dev") return true
+    fun parse(value: String): List<Int> = value.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }
+    val current = parse(version)
+    val minimum = parse(required)
+    val size = maxOf(current.size, minimum.size)
+    for (index in 0 until size) {
+        val left = current.getOrElse(index) { 0 }
+        val right = minimum.getOrElse(index) { 0 }
+        if (left != right) return left > right
+    }
+    return true
+}
+
 private data class BridgeState(
     val connected: Boolean = false,
     val checking: Boolean = false,
@@ -455,7 +471,7 @@ private fun PocketPortApp() {
 
         Button(
             onClick = ::scanRepository,
-            enabled = bridge.connected && !busy,
+            enabled = bridge.connected && coreVersionAtLeast(bridge.version) && !busy,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Accent,
@@ -480,7 +496,12 @@ private fun PocketPortApp() {
         CompactBridgeStatus(
             state = bridge,
             onCheck = ::checkBridge,
+            onUpdateCore = { copyAndOpenTermux(context, CoreUpdateCommand) },
         )
+
+        if (bridge.connected && !coreVersionAtLeast(bridge.version)) {
+            StatusStrip("PocketPort Core v" + bridge.version + " is too old. Update Core to v" + RequiredCoreVersion + " or newer before scanning.")
+        }
 
         if (!bridge.connected) {
             BridgeCard(
@@ -603,12 +624,17 @@ private fun StepRail(
 }
 
 @Composable
-private fun CompactBridgeStatus(state: BridgeState, onCheck: () -> Unit) {
+private fun CompactBridgeStatus(
+    state: BridgeState,
+    onCheck: () -> Unit,
+    onUpdateCore: () -> Unit,
+) {
+    val outdated = state.connected && !coreVersionAtLeast(state.version)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xFF0A100C), RoundedCornerShape(11.dp))
-            .border(1.dp, if (state.connected) Color(0xFF21402D) else Line, RoundedCornerShape(11.dp))
+            .border(1.dp, if (outdated) Warning else if (state.connected) Color(0xFF21402D) else Line, RoundedCornerShape(11.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -617,21 +643,35 @@ private fun CompactBridgeStatus(state: BridgeState, onCheck: () -> Unit) {
             Box(
                 Modifier
                     .size(8.dp)
-                    .background(if (state.connected) Accent else Warning, CircleShape)
+                    .background(if (outdated) Warning else if (state.connected) Accent else Warning, CircleShape)
             )
             Text(
-                if (state.connected) "  PocketPort Core connected" else "  PocketPort Core offline",
-                color = if (state.connected) TextMain else Muted,
+                when {
+                    outdated -> "  Core v" + state.version + " outdated"
+                    state.connected -> "  PocketPort Core v" + state.version
+                    else -> "  PocketPort Core offline"
+                },
+                color = if (outdated) Warning else if (state.connected) TextMain else Muted,
                 fontSize = 11.sp,
             )
         }
-        OutlinedButton(onClick = onCheck, enabled = !state.checking) {
+        OutlinedButton(
+            onClick = if (outdated) onUpdateCore else onCheck,
+            enabled = if (outdated) true else !state.checking,
+        ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_connect),
                 contentDescription = null,
                 modifier = Modifier.size(15.dp),
             )
-            Text(if (state.checking) "  ..." else "  Check", fontSize = 9.sp)
+            Text(
+                when {
+                    outdated -> "  Update Core"
+                    state.checking -> "  ..."
+                    else -> "  Check"
+                },
+                fontSize = 9.sp,
+            )
         }
     }
 }
