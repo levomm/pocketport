@@ -117,6 +117,15 @@ def test_run_script_enters_component_and_runs_through_pocketport() -> None:
     assert "pocketport run -- npm start" in script
 
 
+def test_run_script_prefers_termux_toolchain() -> None:
+    script = render_run_script(_plan())
+    assert script is not None
+    assert 'export PATH="${PREFIX}/bin:${PATH:-}"' in script
+    assert "hash -r" in script
+    assert "export POCKETPORT_TERMUX_TOOLCHAIN=1" in script
+    assert script.index('export PATH="${PREFIX}/bin:${PATH:-}"') < script.index("pocketport run -- npm start")
+
+
 def test_run_script_forwards_user_arguments_to_package_manager_script() -> None:
     script = render_run_script(_plan())
     assert script is not None
