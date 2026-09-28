@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .deepseek_termux import render_deepseek_termux_installer
 from .execution import ExecutionPlan
 
 
@@ -34,20 +35,24 @@ def apply_repository_recipe(slug: str, plan: ExecutionPlan, root: Path) -> Execu
     plan.method = "published-package"
     plan.install_directory = "."
     plan.working_directory = "."
+    installer = render_deepseek_termux_installer(package)
     plan.install = [
-        "pkg update -y",
-        "pkg install -y git nodejs-lts clang make pkg-config python",
-        f"npm install -g {package}",
+        "cat > .pocketport-deepseek-termux-install.sh <<'POCKETPORT_DEEPSEEK_INSTALLER'\n"
+        + installer
+        + "POCKETPORT_DEEPSEEK_INSTALLER",
+        "chmod +x .pocketport-deepseek-termux-install.sh",
+        "./.pocketport-deepseek-termux-install.sh",
     ]
     plan.run = ["pocketport run -- dsh web --no-open"]
 
-    for marker in ("validated-recipe", "pocketport-run"):
+    for marker in ("validated-recipe", "pocketport-run", "deepseek-termux-compat"):
         if marker not in plan.compatibility:
             plan.compatibility.append(marker)
 
     plan.notes = [
         "PocketPort uses the published @deepseek-ai/dsh runtime instead of building the full monorepo from source on the phone.",
-        "This Android/Termux path has been validated end-to-end and avoids the source client build's multi-gigabyte memory requirement.",
+        "This Android/Termux path installs the published package and applies the native Termux compatibility fixes required by DeepSeek Harness.",
+        "The recipe patches Node native-addon build assumptions, builds Sharp against Termux libvips, enables Node internals required by HMR, and applies Android-safe file publication fallbacks.",
         "The DeepSeek Harness Web UI listens on http://127.0.0.1:3080 by default.",
         *plan.notes,
     ]
