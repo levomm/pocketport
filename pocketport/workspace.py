@@ -13,6 +13,7 @@ from .entrypoints import enrich_workspace_entrypoint
 from .execution import ExecutionPlan, build_execution_plan
 from .live_scan import _download_archive, _extract_archive, normalize_public_github_url
 from .patcher import patch_repo
+from .recipes import apply_repository_recipe
 from .semantics import semantic_scan
 
 
@@ -199,6 +200,13 @@ def render_run_script(plan: ExecutionPlan) -> str | None:
 set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cd "$ROOT"
+
+if [ -n "${PREFIX:-}" ] && [[ "${PREFIX}" == *"com.termux"* ]]; then
+  export PATH="${PREFIX}/bin:${PATH:-}"
+  hash -r
+  export POCKETPORT_TERMUX_TOOLCHAIN=1
+fi
+
 {working_cd}{setup_block}if [ "$#" -gt 0 ]; then
   {forwarded_command}
 else
@@ -239,6 +247,7 @@ def prepare_public_github(repository: str, *, home: Path | None = None) -> dict[
         patch = patch_repo(root, dry_run=False, backup=False)
         report, artifact = semantic_scan(root)
         plan = enrich_workspace_entrypoint(build_execution_plan(report, root), root)
+        plan = apply_repository_recipe(repo.slug, plan, root)
         components = assess_components(root, report.findings)
         sharp_compat = _repository_has_node_dependency(root, "sharp")
         lefthook_compat = _repository_has_node_dependency(root, "lefthook")
