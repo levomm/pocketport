@@ -83,7 +83,7 @@ private val TextMain = Color(0xFFEDF4EF)
 private val Muted = Color(0xFF8D9B92)
 private val Accent = Color(0xFF72F59C)
 private val Warning = Color(0xFFD8B46F)
-private const val RequiredCoreVersion = "0.3.8"
+private const val RequiredCoreVersion = "0.3.9"
 private const val CoreUpdateCommand = "pkill -f 'pocketport serve' 2>/dev/null || true; python -m pip install -U 'git+https://github.com/levomm/pocketport.git@main'; pocketport serve"
 
 class MainActivity : ComponentActivity() {
