@@ -32,6 +32,9 @@ def test_deepseek_harness_uses_published_android_recipe(tmp_path: Path) -> None:
     assert "@deepseek-ai/dsh@0.1.7-rc.2" in rendered
     assert "SHARP_FORCE_GLOBAL_LIBVIPS" in rendered
     assert "--expose-internals" in rendered
+    assert "pocketport-termux-node-internals" in rendered
+    assert "node-addon-require-builtin" in rendered
+    assert "deepseek-harness-ready-v2" in rendered
     assert "deepseek-termux-compat" in plan.compatibility
     assert plan.run == ["pocketport run -- dsh web --no-open"]
     assert "validated-recipe" in plan.compatibility
