@@ -152,6 +152,13 @@ if fs_local.exists():
             fs_local.write_text(src, "utf-8")
 PY
 
+echo "[PocketPort] validating DeepSeek Harness CLI"
+if ! dsh --version >/dev/null 2>&1; then
+  echo "[PocketPort] DeepSeek Harness CLI smoke test failed after compatibility install." >&2
+  exit 9
+fi
+mkdir -p "$HOME/.pocketport"
+touch "$HOME/.pocketport/deepseek-harness-ready"
 echo "[PocketPort] DeepSeek Harness Android compatibility ready"
 echo "[PocketPort] start with: dsh web --no-open"
 '''
