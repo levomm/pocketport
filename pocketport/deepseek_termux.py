@@ -83,6 +83,45 @@ if first != wanted:
     open(path, "w", encoding="utf-8").write(wanted + "\n" + rest)
 PY
 
+
+APP_BOOT_JS="$DSH_LIB/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js"
+if [ ! -f "$APP_BOOT_JS" ]; then
+  echo "[PocketPort] DeepSeek app-boot runtime not found." >&2
+  exit 6
+fi
+
+python3 - "$APP_BOOT_JS" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+marker = "pocketport-termux-native-builtin-fallback"
+src = open(path, encoding="utf-8").read()
+
+if marker not in src:
+    pattern = re.compile(
+        r"(?P<decl>const|let|var)\s+addon\s*=\s*require\((?P<q>['\"])node-addon-require-builtin(?P=q)\)\s*;?"
+    )
+    replacement = (
+        "const addon = { requireBuiltin: (moduleId) => require(moduleId) }; "
+        "/* " + marker + " */"
+    )
+    patched, count = pattern.subn(replacement, src, count=1)
+    if count != 1:
+        raise SystemExit("PocketPort: DeepSeek app-boot loader patch anchor changed")
+    open(path, "w", encoding="utf-8").write(patched)
+PY
+
+if ! grep -q "pocketport-termux-native-builtin-fallback" "$APP_BOOT_JS"; then
+  echo "[PocketPort] DeepSeek internal-module fallback patch missing after install." >&2
+  exit 7
+fi
+
+if ! "$NODE_BIN" --expose-internals -e "require('internal/modules/esm/loader')" >/dev/null 2>&1; then
+  echo "[PocketPort] Node internal modules are unavailable even with --expose-internals." >&2
+  exit 8
+fi
+
 python3 - "$DSH_LIB" <<'PY'
 from pathlib import Path
 import sys
@@ -158,7 +197,7 @@ if ! dsh --version >/dev/null 2>&1; then
   exit 9
 fi
 mkdir -p "$HOME/.pocketport"
-touch "$HOME/.pocketport/deepseek-harness-ready"
+touch "$HOME/.pocketport/deepseek-harness-ready-v2"
 echo "[PocketPort] DeepSeek Harness Android compatibility ready"
 echo "[PocketPort] start with: dsh web --no-open"
 '''
