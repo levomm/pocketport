@@ -177,3 +177,14 @@ def test_run_script_repairs_missing_install_before_launch() -> None:
     assert '.pocketport/install-complete' in script
     assert 'running installer before start' in script
     assert '"$ROOT/termux-install.sh"' in script
+
+
+def test_deepseek_runner_repairs_missing_android_loader_patch() -> None:
+    plan = _plan()
+    plan.compatibility.append("deepseek-termux-compat")
+    plan.run = ["pocketport run -- dsh web --no-open"]
+    script = render_run_script(plan)
+    assert script is not None
+    assert "DeepSeek Android runtime patch missing; repairing before start" in script
+    assert "pocketport-termux-native-builtin-fallback" in script
+    assert "dsh-app-boot/lib/index.js" in script

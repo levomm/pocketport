@@ -199,6 +199,22 @@ def render_run_script(plan: ExecutionPlan) -> str | None:
     final_command = plan.run[-1]
     forwarded_command = _run_command_with_forwarded_args(final_command)
     setup_block = f"{setup_commands}\n" if setup_commands else ""
+    deepseek_guard = ""
+    if "deepseek-termux-compat" in plan.compatibility:
+        deepseek_guard = r'''
+NPM_ROOT="$(npm root -g 2>/dev/null || true)"
+DSH_APP_BOOT="$NPM_ROOT/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js"
+if ! command -v dsh >/dev/null 2>&1 \
+  || [ ! -f "$DSH_APP_BOOT" ] \
+  || ! grep -q "pocketport-termux-native-builtin-fallback" "$DSH_APP_BOOT"; then
+  echo "[PocketPort] DeepSeek Android runtime patch missing; repairing before start"
+  if [ ! -x "$ROOT/termux-install.sh" ]; then
+    echo "[PocketPort] installer is missing or not executable." >&2
+    exit 6
+  fi
+  "$ROOT/termux-install.sh"
+fi
+'''
     return f'''#!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
@@ -219,6 +235,7 @@ if [ ! -f "$ROOT/.pocketport/install-complete" ]; then
   "$ROOT/termux-install.sh"
 fi
 
+{deepseek_guard}
 {working_cd}{setup_block}if [ "$#" -gt 0 ]; then
   {forwarded_command}
 else
